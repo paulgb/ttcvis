@@ -1,7 +1,9 @@
 
-rawdata/ttc: downloads/OpenData_TTC_Schedules.zip
-	mkdir -p rawdata/ttc ;\
-	unzip downloads/OpenData_TTC_Schedules.zip -d rawdata/ttc/
+all: data
+
+data: downloads/OpenData_TTC_Schedules.zip
+	mkdir -p data ;\
+	unzip downloads/OpenData_TTC_Schedules.zip -d data/
 
 downloads/OpenData_TTC_Schedules.zip:
 	mkdir -p downloads ;\
