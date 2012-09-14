@@ -1,4 +1,5 @@
 
+from argparse import ArgumentParser
 from os.path import dirname, join
 import os
 import csv
@@ -56,8 +57,8 @@ def create_graph(trip_set):
         previous_stop = stops.next()
         for stop in stops:
             edges.setdefault(previous_stop['stop_id'], dict()) \
-                 .setdefault(stop['stop_id'], set()) \
-                 .add((
+                 .setdefault(stop['stop_id'], list()) \
+                 .append((
                      time_to_seconds(previous_stop['departure_time']),
                      time_to_seconds(stop['arrival_time'])))
             previous_stop = stop
@@ -88,21 +89,16 @@ def shortest_path_to_edges(edges, origin_time, origin_stops):
 
     while not queue.empty():
         (time, stop) = queue.get()
-        print time, stop
         if stop in min_time:
             continue
         min_time[stop] = time
 
         if stop not in edges:
-            print stop, 'has no out edges'
-            # no out-edges
             continue
         for next_stop, times in edges[stop].iteritems():
             try:
                 next_stop_time = min(arr for dep, arr in times if dep > time)
             except ValueError:
-                # the node is unreachable
-                print 'got here'
                 continue
             queue.put((next_stop_time, next_stop))
             min_time_edge[(stop, next_stop)] = next_stop_time
@@ -173,6 +169,29 @@ def output_segments(segments):
 
 
 @mem.cache
+def output_edges_json(edges):
+    fh = file(join(output_dir(), 'edges.json'), 'w')
+
+    json.dump(edges, fh, check_circular=False)
+
+
+@mem.cache
+def output_svg(segments):
+    fh = file(join(output_dir(), 'segments.svg'), 'w')
+
+    for (start_stop_id, end_stop_id), path in segments:
+        print >> fh, '<path id="edge_%s_%s" d="' % (start_stop_id, end_stop_id)
+        command = 'M'
+        for i, (lat, lon) in enumerate(path):
+            print >> fh, ('%s%s %s' % (command, lat, lon)),
+            if i % 6 == 0:
+                print >> fh
+            command = 'L'
+
+        print >> fh, '"/>'
+
+
+@mem.cache
 def get_segments():
     shapes = load_csv_data_file('shapes')
     shapes_to_trips, trips_to_shapes = load_shapes_to_trips()
@@ -239,25 +258,36 @@ def get_segments():
 
 
 def main():
-    print 'loading config'
-    config = load_config()
-    print 'loading trip set'
-    trip_set = create_trip_set(config['service_ids'])
-    print 'loading edges'
-    edges = create_graph(trip_set)
-    print 'loading stop ids'
-    stop_ids = get_origin_stop_ids(config['origin_stops'])
-    print 'calculating minimum edge times'
-    min_time_edge = shortest_path_to_edges(edges, config['origin_time'], stop_ids)
-    print 'loading stops'
-    stops = load_stops()
-    print 'writing edges'
-    output_edges(stops, min_time_edge)
+    parser = ArgumentParser()
+    parser.add_argument('--generate-edges', action='store_true')
+    parser.add_argument('--generate-segments', action='store_true')
+    parser.add_argument('--output-svg', action='store_true')
+    parser.add_argument('--output-edges-json', action='store_true')
+    args = parser.parse_args()
 
-    print 'creating segments'
-    segments = get_segments()
-    print 'writing segments'
-    output_segments(segments)
+    config = load_config()
+    if args.generate_edges or args.output_edges_json:
+        trip_set = create_trip_set(config['service_ids'])
+        edges = create_graph(trip_set)
+
+    if args.generate_edges:
+        stop_ids = get_origin_stop_ids(config['origin_stops'])
+        min_time_edge = shortest_path_to_edges(edges, config['origin_time'], stop_ids)
+        stops = load_stops()
+        output_edges(stops, min_time_edge)
+
+    if args.output_edges_json:
+        output_edges_json(edges)
+
+    if args.generate_segments or args.output_svg:
+        segments = get_segments()
+
+    if args.generate_segments:
+        output_segments(segments)
+    
+    if args.output_svg:
+        output_svg(segments)
+
 
 
 if __name__ == '__main__':
