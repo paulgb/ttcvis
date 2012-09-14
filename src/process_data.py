@@ -183,7 +183,7 @@ def output_svg(segments):
         print >> fh, '<path id="edge_%s_%s" d="' % (start_stop_id, end_stop_id)
         command = 'M'
         for i, (lat, lon) in enumerate(path):
-            print >> fh, ('%s%s %s' % (command, lat, lon)),
+            print >> fh, ('%s%s %s' % (command, lon, lat)),
             if i % 6 == 0:
                 print >> fh
             command = 'L'
