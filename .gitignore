@@ -1,3 +1,9 @@
 downloads
 rawdata
 .Rproj.user
+build
+cache
+computed
+data
+svg
+*.pyc
