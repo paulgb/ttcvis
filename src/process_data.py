@@ -90,14 +90,14 @@ def create_trip_set():
 @mem.cache
 def create_graph(trip_set):
     stop_times = load_csv_data_file('stop_times')
-    edges = dict()
+    graph = dict()
 
     for trip, stops in groupby(stop_times, lambda x: x['trip_id']):
         if trip not in trip_set:
             continue
         previous_stop = stops.next()
         for stop in stops:
-            edges.setdefault(int(previous_stop['stop_id']), dict()) \
+            graph.setdefault(int(previous_stop['stop_id']), dict()) \
                  .setdefault(int(stop['stop_id']), list()) \
                  .append([
                      time_to_seconds(previous_stop['departure_time']),
@@ -106,7 +106,7 @@ def create_graph(trip_set):
             previous_stop = stop
 
     # compress stop times by taking a delta
-    for first_stop, second_stops in edges.iteritems():
+    for first_stop, second_stops in graph.iteritems():
         for second_stop, stop_times in second_stops.iteritems():
             stop_times.sort()
             previous_time = stop_times[0][0]
@@ -115,7 +115,7 @@ def create_graph(trip_set):
                 previous_time, stop_times[i][0] = \
                   (stop_times[i][0], stop_times[i][0] - previous_time)
 
-    return edges
+    return graph
 
 @mem.cache
 def load_stops():
