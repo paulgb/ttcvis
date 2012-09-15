@@ -6,7 +6,7 @@
   xmlns:xlink="http://www.w3.org/1999/xlink"
   style="width: 100%; height: 100%" viewBox="{{ config.svg_viewbox }}">
     <defs>
-        <script src="../lib/buckets.js"></script>
+        <script xlink:href="../lib/buckets.js"></script>
         <script xlink:href="../templates/main.js"></script>
         <style type="text/css"><![CDATA[
             path {
@@ -17,5 +17,6 @@
         ]]></style>
     </defs>
     <g transform="{{ config.svg_transform }}">
+{{segments}}
     </g>
 </svg>
