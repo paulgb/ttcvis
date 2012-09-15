@@ -1,11 +1,18 @@
 
-all: data computed/edges.csv computed/segments.csv
+all : dist/main.js
 
-computed/edges.csv : data 
-	python src/process_data.py --generate-edges
+dist/main.js : client/main.coffee computed/graph.json computed/segments.json computed/coords.json
+	mkdir -p dist ;\
+	browserify -o dist/main.js client/main.coffee
 
-computed/segments.csv : data
-	python src/process_data.py --generate-segments
+computed/graph.json : data 
+	python src/process_data.py --output-graph
+
+computed/segments.json : data
+	python src/process_data.py --output-segments
+
+computed/coords.json : data 
+	python src/process_data.py --output-coords
 
 data : downloads/OpenData_TTC_Schedules.zip
 	mkdir -p data ;\

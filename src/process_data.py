@@ -163,7 +163,6 @@ def get_segments(trip_set, coords):
             ((coords[p['shape_pt_lat'], p['shape_pt_lon']]), float(p['shape_dist_traveled']))
                 for p in points]
 
-        trip_segments = dict()
         for stops in shapes_to_stop_set[shape_id]:
             stops = iter(stops)
             points_iter = iter(points_latlon)
@@ -200,14 +199,12 @@ def get_segments(trip_set, coords):
                             path.append([next_point, 1.0])
                             new_path = [next_point]
 
-                        trip_segments['%s_%s' % (previous_stop, stop_id)] = path
+                        segments.setdefault(previous_stop, dict())[stop_id] = path
 
                         previous_stop = stop_id
 
                         path = new_path
                         dist_travelled = stop_dist
-
-        segments.update(trip_segments)
 
     return segments
 
