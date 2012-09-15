@@ -5,7 +5,7 @@ import os
 import csv
 from itertools import groupby
 import json
-from Queue import PriorityQueue
+from collections import defaultdict
 
 
 from joblib import Memory
@@ -33,8 +33,49 @@ def load_config():
     return load_config.config
 
 
+def output_json(obj, filename):
+    fh = file(join(output_dir(), filename + '.json'), 'w')
+
+    json.dump(obj, fh)
+
+
+def output_dir():
+    computed_dir = join(dirname(__file__), '../', 'computed')
+    try:
+        os.mkdir(computed_dir)
+    except OSError:
+        pass
+    return computed_dir
+
+
 @mem.cache
-def create_trip_set(service_ids):
+def generate_coords():
+    shapes = load_csv_data_file('shapes')
+    coords = dict()
+    count = 0
+
+    for shape in shapes:
+        coord = (shape['shape_pt_lat'], shape['shape_pt_lon'])
+        if coord in coords:
+            continue
+        coords[coord] = count
+        count = count + 1
+
+    return coords
+
+
+def output_coords(coords):
+    fh = file(join(output_dir(), 'coords.json'), 'w')
+    coords_map = dict((v, k) for (k, v) in coords.iteritems())
+    coords = (coords_map[i] for i in xrange(0, len(coords)))
+    coords_list = [(float(lat), float(lon)) for lat, lon in coords]
+
+    json.dump(coords_list, fh)
+
+
+@mem.cache
+def create_trip_set():
+    service_ids = load_config()['service_ids']
     trips = load_csv_data_file('trips')
     
     trip_set = set()
@@ -56,55 +97,25 @@ def create_graph(trip_set):
             continue
         previous_stop = stops.next()
         for stop in stops:
-            edges.setdefault(previous_stop['stop_id'], dict()) \
-                 .setdefault(stop['stop_id'], list()) \
-                 .append((
+            edges.setdefault(int(previous_stop['stop_id']), dict()) \
+                 .setdefault(int(stop['stop_id']), list()) \
+                 .append([
                      time_to_seconds(previous_stop['departure_time']),
-                     time_to_seconds(stop['arrival_time'])))
+                     time_to_seconds(stop['arrival_time'])
+                 ])
             previous_stop = stop
 
+    # compress stop times by taking a delta
+    for first_stop, second_stops in edges.iteritems():
+        for second_stop, stop_times in second_stops.iteritems():
+            stop_times.sort()
+            previous_time = stop_times[0][0]
+            for i in xrange(1, len(stop_times)):
+                stop_times[i][1] -= stop_times[i][0]
+                previous_time, stop_times[i][0] = \
+                  (stop_times[i][0], stop_times[i][0] - previous_time)
+
     return edges
-
-
-@mem.cache
-def get_origin_stop_ids(origin_stop):
-    stops = load_csv_data_file('stops')
-    stop_ids = set()
-    for stop in stops:
-        if stop['stop_code'] in origin_stop:
-            stop_ids.add(stop['stop_id'])
-    
-    return stop_ids
-
-
-@mem.cache
-def shortest_path_to_edges(edges, origin_time, origin_stops):
-    queue = PriorityQueue()
-
-    min_time = dict()
-    min_time_edge = dict()
-
-    for origin_stop in origin_stops:
-        queue.put((origin_time, origin_stop))
-
-    while not queue.empty():
-        (time, stop) = queue.get()
-        if stop in min_time:
-            continue
-        min_time[stop] = time
-
-        if stop not in edges:
-            continue
-        for next_stop, times in edges[stop].iteritems():
-            try:
-                next_stop_time = min(arr for dep, arr in times if dep > time)
-            except ValueError:
-                continue
-            queue.put((next_stop_time, next_stop))
-            min_time_edge[(stop, next_stop)] = next_stop_time
-
-    return min_time_edge
-
 
 @mem.cache
 def load_stops():
@@ -112,183 +123,119 @@ def load_stops():
     return dict((stop['stop_id'], stop) for stop in stops)
 
 
-def output_dir():
-    computed_dir = join(dirname(__file__), '../', 'computed')
-    try:
-        os.mkdir(computed_dir)
-    except OSError:
-        pass
-    return computed_dir
-
-
 @mem.cache
-def output_edges(stops, min_time_edge):
-    fh = file(join(output_dir(), 'edges.csv'), 'w')
-    writer = csv.writer(fh)
-
-    writer.writerow(('start_stop_id', 'start_stop_lat', 'start_stop_lon',
-        'end_stop_id', 'end_stop_lat', 'end_stop_lon', 'end_time'))
-
-    for (start_stop_id, end_stop_id), time in min_time_edge.iteritems():
-        start_stop = stops[start_stop_id]
-        end_stop = stops[end_stop_id]
-        writer.writerow((
-            start_stop['stop_id'],
-            start_stop['stop_lat'],
-            start_stop['stop_lon'],
-            end_stop['stop_id'],
-            end_stop['stop_lat'],
-            end_stop['stop_lon'],
-            time))
-
-
-@mem.cache
-def load_shapes_to_trips():
+def load_trips_to_shapes(trip_set):
     trips = load_csv_data_file('trips')
     
-    shapes_to_trips = dict()
     trips_to_shapes = dict()
     for trip in trips:
-        if trip['shape_id'] not in shapes_to_trips:
-            shapes_to_trips[trip['shape_id']] = trip['trip_id']
-            trips_to_shapes[trip['trip_id']] = trip['shape_id']
+        trips_to_shapes[trip['trip_id']] = trip['shape_id']
 
-    return shapes_to_trips, trips_to_shapes
+    return trips_to_shapes
 
 
 @mem.cache
-def output_segments(segments):
-    fh = file(join(output_dir(), 'segments.csv'), 'w')
-    writer = csv.writer(fh)
-
-    writer.writerow(('start_stop_id', 'end_stop_id', 'point_lat', 'point_lon'))
-
-    for (start_stop_id, end_stop_id), path in segments:
-        for point in path:
-            writer.writerow((start_stop_id, end_stop_id, point[0], point[1]))
-
-
-@mem.cache
-def output_edges_json(edges):
-    fh = file(join(output_dir(), 'edges.json'), 'w')
-
-    json.dump(edges, fh, check_circular=False)
-
-
-@mem.cache
-def output_svg(segments):
-    fh = file(join(output_dir(), 'segments.svg'), 'w')
-
-    for (start_stop_id, end_stop_id), path in segments:
-        print >> fh, '<path id="edge_%s_%s" d="' % (start_stop_id, end_stop_id)
-        command = 'M'
-        for i, (lat, lon) in enumerate(path):
-            print >> fh, ('%s%s %s' % (command, lon, lat)),
-            if i % 6 == 0:
-                print >> fh
-            command = 'L'
-
-        print >> fh, '"/>'
-
-
-@mem.cache
-def get_segments():
-    shapes = load_csv_data_file('shapes')
-    shapes_to_trips, trips_to_shapes = load_shapes_to_trips()
+def get_shapes_to_stop_set(trip_set):
+    shapes_to_stop_set = dict()
+    trips_to_shapes = load_trips_to_shapes(trip_set)
     stop_times = load_csv_data_file('stop_times')
-    segments = []
-
-    trips = dict()
-    for trip, stops in groupby(stop_times, lambda x: x['trip_id']):
-        if trip not in trips_to_shapes:
+    for trip_id, stops in groupby(stop_times, lambda x: x['trip_id']):
+        shape_id = trips_to_shapes[trip_id]
+        stop_set = shapes_to_stop_set.setdefault(shape_id, set())
+        if trip_id not in trip_set:
             continue
         
-        shape_id = trips_to_shapes[trip]
-        trips[shape_id] = [(stop['stop_id'], float(stop['shape_dist_traveled'] or 0)) for stop in stops]
+        stop_set.add(tuple((stop['stop_id'], float(stop['shape_dist_traveled'] or 0))
+              for stop in stops))
 
+    return shapes_to_stop_set
+
+
+@mem.cache
+def get_segments(trip_set, coords):
+    shapes_to_stop_set = get_shapes_to_stop_set(trip_set)
+
+    shapes = load_csv_data_file('shapes')
+
+    segments = dict()
     for shape_id, points in groupby(shapes, lambda x: x['shape_id']):
-        points_latlon = (
-            ((float(p['shape_pt_lat']), float(p['shape_pt_lon'])), float(p['shape_dist_traveled']))
-                for p in points)
-        trip = iter(trips[shape_id])
-        trip_segments = []
+        points_latlon = [
+            ((coords[p['shape_pt_lat'], p['shape_pt_lon']]), float(p['shape_dist_traveled']))
+                for p in points]
 
-        previous_stop, dist_travelled = trip.next()
-        assert dist_travelled == 0
+        trip_segments = dict()
+        for stops in shapes_to_stop_set[shape_id]:
+            stops = iter(stops)
+            points_iter = iter(points_latlon)
 
-        start_point, dist_travelled = points_latlon.next()
-        assert dist_travelled == 0
-        path = [start_point]
+            previous_stop, dist_travelled = stops.next()
+            assert dist_travelled == 0
 
-        take_next = True
-        for stop_id, stop_dist in trip:
-            while dist_travelled < stop_dist:
-                if take_next:
-                    next_point, new_dist_travelled = points_latlon.next()
+            start_point, dist_travelled = points_iter.next()
+            assert dist_travelled == 0
+            path = [start_point]
 
-                if new_dist_travelled < stop_dist:
-                    path.append(next_point)
-                    dist_travelled = new_dist_travelled
-                    take_next = True
+            take_next = True
+            for stop_id, stop_dist in stops:
+                while dist_travelled < stop_dist:
+                    if take_next:
+                        next_point, new_dist_travelled = points_iter.next()
 
-                else:
-                    if new_dist_travelled > dist_travelled:
-                        dist_needed = stop_dist - dist_travelled
-                        segment_dist = new_dist_travelled - dist_travelled
-                        segment_fraction = dist_needed / segment_dist
-
-                        last_lat, last_lon = path[-1]
-                        new_lat, new_lon = next_point
-                        end_lat = last_lat + (new_lat - last_lat) * segment_fraction
-                        end_lon = last_lon + (new_lon - last_lon) * segment_fraction
-                        take_next = False
-                        path.append((end_lat, end_lon))
-                    else:
+                    if new_dist_travelled < stop_dist:
+                        path.append([next_point, 1.0])
+                        dist_travelled = new_dist_travelled
                         take_next = True
-                        path.append(next_point)
 
-                    trip_segments.append(((previous_stop, stop_id), path))
-                    previous_stop = stop_id
-                    path = path[-1:]
-                    dist_travelled = stop_dist
+                    else:
+                        if new_dist_travelled > dist_travelled:
+                            dist_needed = stop_dist - dist_travelled
+                            segment_dist = new_dist_travelled - dist_travelled
+                            segment_fraction = round(dist_needed / segment_dist, 3)
 
-        segments.extend(trip_segments)
+                            new_path = [[path[-1], segment_fraction]]
+                            path.append([next_point, segment_fraction])
+                            take_next = False
+                        else:
+                            take_next = True
+                            path.append([next_point, 1.0])
+                            new_path = [next_point]
+
+                        trip_segments['%s_%s' % (previous_stop, stop_id)] = path
+
+                        previous_stop = stop_id
+
+                        path = new_path
+                        dist_travelled = stop_dist
+
+        segments.update(trip_segments)
 
     return segments
 
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument('--generate-edges', action='store_true')
-    parser.add_argument('--generate-segments', action='store_true')
-    parser.add_argument('--output-svg', action='store_true')
-    parser.add_argument('--output-edges-json', action='store_true')
+    parser.add_argument('--output-coords', action='store_true')
+    parser.add_argument('--output-segments', action='store_true')
+    parser.add_argument('--output-graph', action='store_true')
     args = parser.parse_args()
 
     config = load_config()
-    if args.generate_edges or args.output_edges_json:
-        trip_set = create_trip_set(config['service_ids'])
-        edges = create_graph(trip_set)
 
-    if args.generate_edges:
-        stop_ids = get_origin_stop_ids(config['origin_stops'])
-        min_time_edge = shortest_path_to_edges(edges, config['origin_time'], stop_ids)
-        stops = load_stops()
-        output_edges(stops, min_time_edge)
-
-    if args.output_edges_json:
-        output_edges_json(edges)
-
-    if args.generate_segments or args.output_svg:
-        segments = get_segments()
-
-    if args.generate_segments:
-        output_segments(segments)
+    coords = generate_coords()
     
-    if args.output_svg:
-        output_svg(segments)
+    if args.output_coords:
+        output_coords(coords)
+    
+    if args.output_segments or args.output_graph:
+        trip_set = create_trip_set()
 
+    if args.output_segments:
+        segments = get_segments(trip_set, coords)
+        output_json(segments, 'segments')
 
+    if args.output_graph:
+        graph = create_graph(trip_set)
+        output_json(graph, 'graph')
 
 if __name__ == '__main__':
     main()
