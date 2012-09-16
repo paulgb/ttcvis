@@ -7,53 +7,77 @@ segments = require('../computed/segments.json')
 PriorityQueue = require('../lib/buckets.js')
 ###
 
+class CoordinateSpace
+    constructor: (viewbox, target_dims) ->
+        [@width, @height] = target_dims
+        [@top_lat, @left_lon, right_lat, bottom_lon] = viewbox
+        @lon_range = right_lon - @left_lon
+        @lat_range = bottom_lon - @top_lat
+
+    toPixels: ([coord_lat, coord_lon]) ->
+        [@width * (coord_lon - @left_lon) / @lon_range,
+         @height * (coord_lat - @top_lat) / @lat_range]
+
+class Canvas
+    constructor: ->
+        @canvas = document.getElementById 'client_canvas'
+        @ctx = @canvas.getContext '2d'
+
+    drawCircle = ([x, y], radius=1, fill='black') ->
+        ctx.beginPath()
+        ctx.arc(x, y, raduis, 0, 2*Math.PI)
+        ctx.fillStyle = fill
+        ctx.fill()
+
+    drawPath = (path, strokeWidth=1, color='black') ->
+        ctx.beginPath()
+        for [x, y] in path
+            ctx.lineTo(x, y)
+        ctx.lineWidth = strokeWidth
+        ctx.strokeStyle = color
+        ctx.stroke()
+
+class TransitData
+    constructor: ->
+        @coords = require('../computed/coords.json')
+        @segments = require('../computed/segments.json')
+
+    getCoord: (coord) ->
+        if coord[0] == undefined
+            coord_id = coord
+            return [@coords[coord_id], 1]
+        else
+            return [@coords[coord[0]], coord[1]]
+
+    interpolate: (start, end, fraction) ->
+        return start + (end - start) * fraction
+
+    interpolatePair: ([start1, start2], [end1, end2], fraction) ->
+        [@interpolate(start1, end1, fraction),
+         @interpolate(start2, end2, fraction)]
+
+    segmentToPath: (segment) ->
+        path = []
+        for coord_descriptor, i in segment
+            coord, frac = getCoord coord_descriptor
+            if frac == 1
+                path.push coord
+            else
+                if i == 0
+                    [nextCoord,] = @getCoord segment[1]
+                    prevCoord = coord
+                else
+                    [prevCoord,] = @getCoord segment[i-1]
+                    nextCoord = coord
+                path.push @interpolatePair(prevCoord, nextCoord, frac)
+        return path
+
+
 main = ->
     config = require('../config.json')
     [lon_min, lat_min, lon_max, lat_max] = config.viewbox
 
-    canvas_width = 1200
-    canvas_height = 600
+    cs = new CoordinateSpace(config.viewbox, config.canvasSize)
 
-    canvas = document.getElementById 'client_canvas'
-    ctx = canvas.getContext '2d'
-
-    drawCircle = ([lat, lon]) ->
-        ctx.beginPath()
-        ctx.arc(to_x(lon), to_y(lat), 1, 0, 2*Math.PI)
-        ctx.fillStyle = 'red'
-        ctx.fill()
-
-    to_x = (k) ->
-        canvas_width * (k - lon_min) / (lon_max - lon_min)
-
-    to_y = (k) ->
-        canvas_height * (k - lat_min) / (lat_max - lat_min)
-
-    seglist = []
-    for first_stop, second_stops of segments
-        for second_stop, path of second_stops
-            seglist.push path
-
-    drawSegment = (path) ->
-        ctx.beginPath()
-        for point in path
-            if point[0] == undefined
-                p = coords[point]
-            else
-                p = coords[point[0]]
-            [lat, lon] = p
-            ctx.lineTo(to_x(lon), to_y(lat))
-        ctx.lineWidth = 1
-        ctx.strokeStyle = 'black'
-        ctx.stroke()
-
-
-    x = 0
-    drawSegments = ->
-        drawSegment seg for seg in seglist[x..(x+100)]
-        x = x + 100
-        webkitRequestAnimationFrame drawSegments
-
-    drawSegments()
 
 main()
