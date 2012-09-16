@@ -8,34 +8,36 @@ PriorityQueue = require('../lib/buckets.js')
 ###
 
 class CoordinateSpace
-    constructor: (viewbox, target_dims) ->
-        [@width, @height] = target_dims
-        [@top_lat, @left_lon, right_lat, bottom_lon] = viewbox
-        @lon_range = right_lon - @left_lon
-        @lat_range = bottom_lon - @top_lat
+    constructor: (viewBox, targetDims) ->
+        [@width, @height] = targetDims
+        [@topLat, @leftLon, bottomLat, rightLon] = viewBox
+        @lonRange = rightLon - @leftLon
+        @latRange = bottomLat - @topLat
 
-    toPixels: ([coord_lat, coord_lon]) ->
-        [@width * (coord_lon - @left_lon) / @lon_range,
-         @height * (coord_lat - @top_lat) / @lat_range]
+    toPixels: ([coordLat, coordLon]) ->
+        [@width * (coordLon - @leftLon) / @lonRange,
+         @height * (coordLat - @topLat) / @latRange]
 
 class Canvas
-    constructor: ->
-        @canvas = document.getElementById 'client_canvas'
+    constructor: (canvasId, @cs) ->
+        @canvas = document.getElementById canvasId
         @ctx = @canvas.getContext '2d'
 
-    drawCircle = ([x, y], radius=1, fill='black') ->
-        ctx.beginPath()
-        ctx.arc(x, y, raduis, 0, 2*Math.PI)
-        ctx.fillStyle = fill
-        ctx.fill()
+    drawCircle: (point, radius=1, fill='black') ->
+        [x, y] = @cs.toPixels(point)
+        @ctx.beginPath()
+        @ctx.arc(x, y, raduis, 0, 2*Math.PI)
+        @ctx.fillStyle = fill
+        @ctx.fill()
 
-    drawPath = (path, strokeWidth=1, color='black') ->
-        ctx.beginPath()
-        for [x, y] in path
-            ctx.lineTo(x, y)
-        ctx.lineWidth = strokeWidth
-        ctx.strokeStyle = color
-        ctx.stroke()
+    drawPath: (path, strokeWidth=1, color='black') ->
+        @ctx.beginPath()
+        for point in path
+            [x, y] = @cs.toPixels(point)
+            @ctx.lineTo(x, y)
+        @ctx.lineWidth = strokeWidth
+        @ctx.strokeStyle = color
+        @ctx.stroke()
 
 class TransitData
     constructor: ->
@@ -44,22 +46,22 @@ class TransitData
 
     getCoord: (coord) ->
         if coord[0] == undefined
-            coord_id = coord
-            return [@coords[coord_id], 1]
+            coordId = coord
+            return [@coords[coordId], 1]
         else
             return [@coords[coord[0]], coord[1]]
 
     interpolate: (start, end, fraction) ->
-        return start + (end - start) * fraction
+        start + (end - start) * fraction
 
     interpolatePair: ([start1, start2], [end1, end2], fraction) ->
         [@interpolate(start1, end1, fraction),
          @interpolate(start2, end2, fraction)]
 
-    segmentToPath: (segment) ->
+    decompressSegment: (segment) ->
         path = []
-        for coord_descriptor, i in segment
-            coord, frac = getCoord coord_descriptor
+        for coordDescriptor, i in segment
+            [coord, frac] = @getCoord coordDescriptor
             if frac == 1
                 path.push coord
             else
@@ -72,12 +74,23 @@ class TransitData
                 path.push @interpolatePair(prevCoord, nextCoord, frac)
         return path
 
+    getSeglist: (n) ->
+        seglist = []
+        i = 0
+        for firstStop, secondStops of @segments
+            for secondStop, segment of secondStops
+                seglist.push @decompressSegment(segment)
+                if n and ++i == n
+                    return seglist
+        return seglist
 
 main = ->
     config = require('../config.json')
-    [lon_min, lat_min, lon_max, lat_max] = config.viewbox
 
-    cs = new CoordinateSpace(config.viewbox, config.canvasSize)
-
+    cs = new CoordinateSpace(config.viewbox, config.canvas_size)
+    canvas = new Canvas('client_canvas', cs)
+    td = new TransitData()
+    
+    canvas.drawPath segment for segment in td.getSeglist()
 
 main()

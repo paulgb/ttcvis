@@ -181,7 +181,7 @@ def get_segments(trip_set, coords):
                         next_point, new_dist_travelled = points_iter.next()
 
                     if new_dist_travelled < stop_dist:
-                        path.append([next_point])
+                        path.append(next_point)
                         dist_travelled = new_dist_travelled
                         take_next = True
 
@@ -199,7 +199,7 @@ def get_segments(trip_set, coords):
                             take_next = False
                         else:
                             take_next = True
-                            path.append([next_point])
+                            path.append(next_point)
                             new_path = [next_point]
 
                         segments.setdefault(previous_stop, dict())[stop_id] = path
