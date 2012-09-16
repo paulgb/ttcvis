@@ -1,11 +1,5 @@
 
-#graph = require('../computed/graph.json')
-coords = require('../computed/coords.json')
-segments = require('../computed/segments.json')
-
-###
-PriorityQueue = require('../lib/buckets.js')
-###
+{Dictionary, PriorityQueue, defaultCompare} = require('../lib/buckets.js')
 
 class CoordinateSpace
     constructor: (viewBox, targetDims) ->
@@ -23,14 +17,14 @@ class Canvas
         @canvas = document.getElementById canvasId
         @ctx = @canvas.getContext '2d'
 
-    drawCircle: (point, radius=1, fill='black') ->
+    drawCircle: (point, radius=1, fill='black') =>
         [x, y] = @cs.toPixels(point)
         @ctx.beginPath()
         @ctx.arc(x, y, raduis, 0, 2*Math.PI)
         @ctx.fillStyle = fill
         @ctx.fill()
 
-    drawPath: (path, strokeWidth=1, color='black') ->
+    drawPath: (path, strokeWidth=1, color='black') =>
         @ctx.beginPath()
         for point in path
             [x, y] = @cs.toPixels(point)
@@ -43,6 +37,7 @@ class TransitData
     constructor: ->
         @coords = require('../computed/coords.json')
         @segments = require('../computed/segments.json')
+        @graph = require('../computed/graph.json')
 
     getCoord: (coord) ->
         if coord[0] == undefined
@@ -74,6 +69,9 @@ class TransitData
                 path.push @interpolatePair(prevCoord, nextCoord, frac)
         return path
 
+    getSegment: (startNode, endNode) ->
+        @decompressSegment(@segments[startNode][endNode])
+
     getSeglist: (n) ->
         seglist = []
         i = 0
@@ -84,13 +82,75 @@ class TransitData
                     return seglist
         return seglist
 
+class Traveller
+    constructor: (@td, startNodes, startTime=0, @segmentCallback) ->
+        lowFirst = ([a,], [b,]) -> defaultCompare(b, a)
+        @minTimes = new Dictionary()
+        @minTimeEdges = new Dictionary()
+        @queue = new PriorityQueue(lowFirst)
+        for node in startNodes
+            @queue.enqueue [startTime, node]
+
+    clockTo: (clockTime) ->
+        while (not @queue.isEmpty()) and (@queue.peek()[0] <= clockTime)
+            [time, stop, lastStop] = @queue.dequeue()
+            if @minTimes.containsKey stop
+                continue
+            @minTimes.set stop, time
+            if lastStop != undefined
+                segment = @td.getSegment lastStop, stop
+                @segmentCallback segment
+
+            if stop not of @td.graph
+                continue
+
+            for nextStop, times of @td.graph[stop]
+                lastDepartureTime = 0
+                for trip in times
+                    [departureTime, arrivalTime] = trip
+                    departureTime += lastDepartureTime
+                    if departureTime >= time
+                        arrivalTime += departureTime
+                        @queue.enqueue [arrivalTime, nextStop, stop]
+                        @minTimeEdges.set([stop, nextStop], arrivalTime)
+                        break
+                    lastDepartureTime = departureTime
+    
+class Timer
+    milis: ->
+        date = new Date()
+        date.getTime()
+
+    startTimer: ->
+        @lastMilis = @milis()
+
+    checkTimer: ->
+        return @milis() - @lastMilis
+
 main = ->
     config = require('../config.json')
 
-    cs = new CoordinateSpace(config.viewbox, config.canvas_size)
+    cs = new CoordinateSpace(config.viewBox, config.canvasSize)
     canvas = new Canvas('client_canvas', cs)
     td = new TransitData()
     
-    canvas.drawPath segment for segment in td.getSeglist()
+    traveller = new Traveller(td, config.originStops, config.originTime, canvas.drawPath)
+
+    clockStart = clock = 35500
+    timer = new Timer()
+    timer.startTimer()
+    milis = timer.milis()
+    incrClock = ->
+        if timer.checkTimer() < 1
+            webkitRequestAnimationFrame incrClock
+            return
+        timer.startTimer()
+        clock = clockStart + (timer.milis() - milis) / 10
+        traveller.clockTo clock
+        if clock <= 60000
+            webkitRequestAnimationFrame incrClock
+
+    incrClock()
+    #canvas.drawPath segment for segment in td.getSeglist()
 
 main()

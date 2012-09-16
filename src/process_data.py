@@ -75,7 +75,7 @@ def output_coords(coords):
 
 @mem.cache
 def create_trip_set():
-    service_ids = load_config()['service_ids']
+    service_ids = load_config()['serviceIds']
     trips = load_csv_data_file('trips')
     
     trip_set = set()
@@ -97,6 +97,8 @@ def create_graph(trip_set):
             continue
         previous_stop = stops.next()
         for stop in stops:
+            if time_to_seconds(stop['arrival_time']) > 60000:
+                break
             graph.setdefault(int(previous_stop['stop_id']), dict()) \
                  .setdefault(int(stop['stop_id']), list()) \
                  .append([
@@ -218,8 +220,6 @@ def main():
     parser.add_argument('--output-segments', action='store_true')
     parser.add_argument('--output-graph', action='store_true')
     args = parser.parse_args()
-
-    config = load_config()
 
     coords = generate_coords()
     
