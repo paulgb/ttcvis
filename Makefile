@@ -3,7 +3,7 @@ all : dist/main.js
 
 dist/main.js : client/main.coffee computed/graph.json computed/segments.json computed/coords.json
 	mkdir -p dist ;\
-	browserify -o dist/main.js client/main.coffee
+	browserify -d -o dist/main.js -e client/main.coffee
 
 computed/graph.json : data 
 	python src/process_data.py --output-graph

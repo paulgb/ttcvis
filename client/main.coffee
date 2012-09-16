@@ -1,9 +1,13 @@
 
-#graph = require('../computed/graph.json')
+###
+graph = require('../computed/graph.json')
+segments = require('../computed/segments.json')
+coords = require('../computed/coords.json')
+###
 
-#segments = require('../computed/segments.json')
+###
+PriorityQueue = require('../lib/buckets.js')
+###
 
-#coords = require('../computed/coords.json')
 
-alert('hi')
 
