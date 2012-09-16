@@ -1,6 +1,16 @@
 
 {Dictionary, PriorityQueue, defaultCompare} = require('../lib/buckets.js')
 
+lowFirst = ([a,], [b,]) -> defaultCompare(b, a)
+
+interpolate = (start, end, fraction) ->
+    start + (end - start) * fraction
+
+interpolatePair = ([start1, start2], [end1, end2], fraction) ->
+    [interpolate(start1, end1, fraction),
+     interpolate(start2, end2, fraction)]
+
+
 class CoordinateSpace
     constructor: (viewBox, targetDims) ->
         [@width, @height] = targetDims
@@ -16,6 +26,10 @@ class Canvas
     constructor: (canvasId, @cs) ->
         @canvas = document.getElementById canvasId
         @ctx = @canvas.getContext '2d'
+        @pendingAnims = new PriorityQueue(lowFirst)
+        @anims = {}
+        @animIndex = 0
+        @time = 0
 
     drawCircle: (point, radius=1, fill='black') =>
         [x, y] = @cs.toPixels(point)
@@ -33,11 +47,69 @@ class Canvas
         @ctx.strokeStyle = color
         @ctx.stroke()
 
+    euclidean: (point1, point2) ->
+        [x1, y1] = point1
+        [x2, y2] = point2
+        Math.sqrt(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2))
+
+    pathDistance: (path) ->
+        dist = 0
+        lastPoint = path[0]
+        for point in path[1..]
+            dist += @euclidean lastPoint, point
+            lastPoint = point
+        return dist
+
+    animatePath: (path, startTime, endTime) =>
+        animatedPath = [startTime, endTime, path, @pathDistance(path), 0]
+        if startTime > @time
+            @pendingAnims.enqueue(animatedPath)
+        else
+            @anims[++@animIndex] = animatedPath
+    
+    cutPath: (path, cutDist) ->
+        dist = 0
+        lastPoint = path[0]
+
+        for i in [1...path.length]
+            point = path[i]
+            nextDist = @euclidean lastPoint, point
+            if dist + nextDist >= cutDist
+                frac = (cutDist - dist) / nextDist
+                midPoint = interpolatePair lastPoint, point, frac
+
+                beforeCut = path[0...i]
+                afterCut = path[i...]
+                beforeCut.push(midPoint)
+                afterCut.unshift(midPoint)
+
+                return [beforeCut, afterCut]
+            lastPoint = point
+            dist += nextDist
+            
+    updateClock: (time) =>
+        @time = time
+        while (not @pendingAnims.isEmpty()) and (@pendingAnims.peek()[0] < time)
+            @anims[++@animIndex] = @pendingAnims.dequeue
+        for i, anim of @anims
+            [startTime, endTime, path, pathDist, distCovered] = anim
+            frac = (time - startTime) / (endTime - startTime)
+            distNeeded = frac * pathDist
+            [usePath, savePath] = @cutPath path, distNeeded - distCovered
+
+            @drawPath usePath
+            anim[2] = savePath
+            anim[4] = distNeeded
+
+            if time >= endTime
+                delete @anims[i]
+
+
 class TransitData
     constructor: ->
-        @coords = require('../computed/coords.json')
-        @segments = require('../computed/segments.json')
-        @graph = require('../computed/graph.json')
+        #@coords = require('../computed/coords.json')
+        #@segments = require('../computed/segments.json')
+        #@graph = require('../computed/graph.json')
 
     getCoord: (coord) ->
         if coord[0] == undefined
@@ -45,13 +117,6 @@ class TransitData
             return [@coords[coordId], 1]
         else
             return [@coords[coord[0]], coord[1]]
-
-    interpolate: (start, end, fraction) ->
-        start + (end - start) * fraction
-
-    interpolatePair: ([start1, start2], [end1, end2], fraction) ->
-        [@interpolate(start1, end1, fraction),
-         @interpolate(start2, end2, fraction)]
 
     decompressSegment: (segment) ->
         path = []
@@ -66,7 +131,7 @@ class TransitData
                 else
                     [prevCoord,] = @getCoord segment[i-1]
                     nextCoord = coord
-                path.push @interpolatePair(prevCoord, nextCoord, frac)
+                path.push interpolatePair(prevCoord, nextCoord, frac)
         return path
 
     getSegment: (startNode, endNode) ->
@@ -84,7 +149,6 @@ class TransitData
 
 class Traveller
     constructor: (@td, startNodes, startTime=0, @segmentCallback) ->
-        lowFirst = ([a,], [b,]) -> defaultCompare(b, a)
         @minTimes = new Dictionary()
         @minTimeEdges = new Dictionary()
         @queue = new PriorityQueue(lowFirst)
@@ -93,13 +157,10 @@ class Traveller
 
     clockTo: (clockTime) ->
         while (not @queue.isEmpty()) and (@queue.peek()[0] <= clockTime)
-            [time, stop, lastStop] = @queue.dequeue()
+            [time, stop] = @queue.dequeue()
             if @minTimes.containsKey stop
                 continue
             @minTimes.set stop, time
-            if lastStop != undefined
-                segment = @td.getSegment lastStop, stop
-                @segmentCallback segment
 
             if stop not of @td.graph
                 continue
@@ -111,8 +172,10 @@ class Traveller
                     departureTime += lastDepartureTime
                     if departureTime >= time
                         arrivalTime += departureTime
-                        @queue.enqueue [arrivalTime, nextStop, stop]
+                        @queue.enqueue [arrivalTime, nextStop]
                         @minTimeEdges.set([stop, nextStop], arrivalTime)
+                        segment = @td.getSegment stop, nextStop
+                        @segmentCallback(segment, departureTime, arrivalTime)
                         break
                     lastDepartureTime = departureTime
     
@@ -130,12 +193,19 @@ class Timer
 main = ->
     config = require('../config.json')
 
-    cs = new CoordinateSpace(config.viewBox, config.canvasSize)
+    #cs = new CoordinateSpace(config.viewBox, config.canvasSize)
+    cs = new CoordinateSpace([0, 0, 600, 1200], [1200, 600])
     canvas = new Canvas('client_canvas', cs)
     td = new TransitData()
     
-    traveller = new Traveller(td, config.originStops, config.originTime, canvas.drawPath)
+    traveller = new Traveller(td, config.originStops, config.originTime, canvas.animatePath)
 
+    canvas.animatePath([[0, 0], [100, 100], [100, 200], [200, 300]], 0, 100)
+
+    x = 0
+    setInterval (-> canvas.updateClock(++x)), 50
+
+    ###
     clockStart = clock = 35500
     timer = new Timer()
     timer.startTimer()
@@ -146,11 +216,13 @@ main = ->
             return
         timer.startTimer()
         clock = clockStart + (timer.milis() - milis) / 10
+        canvas.updateClock(clock)
         traveller.clockTo clock
         if clock <= 60000
             webkitRequestAnimationFrame incrClock
 
     incrClock()
     #canvas.drawPath segment for segment in td.getSeglist()
+    ###
 
 main()
