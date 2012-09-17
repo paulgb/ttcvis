@@ -139,6 +139,7 @@ class Traveller
         @minTimes = new Dictionary()
         @minTimeEdges = new Dictionary()
         @queue = new PriorityQueue(lowFirst)
+        @minSoFar = new Dictionary()
         for node in startNodes
             @queue.enqueue [startTime, node]
 
@@ -159,8 +160,9 @@ class Traveller
                     departureTime += lastDepartureTime
                     if departureTime >= time
                         arrivalTime += departureTime
-                        @queue.enqueue [arrivalTime, nextStop]
-                        @minTimeEdges.set([stop, nextStop], arrivalTime)
+                        if (not @minSoFar.containsKey(nextStop)) or (@minSoFar.get(nextStop) > arrivalTime)
+                            @queue.enqueue [arrivalTime, nextStop]
+                            @minTimeEdges.set([stop, nextStop], arrivalTime)
                         segment = @td.getSegment stop, nextStop
                         @segmentCallback(segment, departureTime, arrivalTime)
                         break
@@ -181,27 +183,17 @@ main = ->
     config = require('../config.json')
 
     cs = new CoordinateSpace(config.viewBox, config.canvasSize)
-    #cs = new CoordinateSpace([0, 0, 600, 1200], [1200, 600])
     canvas = new Canvas('client_canvas', cs)
     td = new TransitData()
     
     traveller = new Traveller(td, config.originStops, config.originTime, canvas.animatePath)
-
-    #canvas.animatePath([[0, 0], [100, 100], [100, 200], [200, 300]], 0, 100)
-
-    #x = 0
-    #setInterval (-> canvas.updateClock(++x)), 50
 
     clockStart = clock = 35500
     timer = new Timer()
     timer.startTimer()
     milis = timer.milis()
     incrClock = ->
-        if timer.checkTimer() < 10
-            webkitRequestAnimationFrame incrClock
-            return
-        timer.startTimer()
-        clock = clockStart + (timer.milis() - milis) / 10
+        clock = clockStart + (timer.milis() - milis)
         canvas.updateClock(clock)
         traveller.clockTo clock
         if clock <= 60000

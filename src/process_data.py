@@ -195,9 +195,11 @@ def get_segments(trip_set, coords):
 
                             if isinstance(path[-1], list):
                                 new_path = [[path[-1][0], segment_fraction]]
+                                path.append([next_point, segment_fraction + path[-1][1]])
                             else:
                                 new_path = [[path[-1], segment_fraction]]
-                            path.append([next_point, segment_fraction])
+                                path.append([next_point, segment_fraction])
+
                             take_next = False
                         else:
                             take_next = True
