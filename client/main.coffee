@@ -263,7 +263,8 @@ class SimController
 
 class SimUI
     constructor: (@controller) ->
-        @clockElement = document.getElementById('clock_display')
+        @clockTime = document.getElementById('clock_time')
+        @clockDaypart = document.getElementById('clock_daypart')
         @playButton = document.getElementById('play_btn')
         @rewButton = document.getElementById('rew_btn')
         @stepButton = document.getElementById('step_btn')
@@ -300,7 +301,7 @@ class SimUI
         @speedSelect.onchange = =>
             @controller.setSpeed @speedSelect.value
 
-    humanTime: (clock) ->
+    humanTime: (clock, sep=false) ->
         days = ['Monday', 'Tuesday']
         halfdays = ['AM', 'PM']
         
@@ -315,10 +316,13 @@ class SimUI
         hour = 12 if hour == 0
         minute = Math.floor((clock % ONE_HOUR) / ONE_MINUTE)
         minute = minute = "0" + minute if minute < 10
-        return "#{hour}:#{minute} #{halfdays[halfday]}"
+        if sep
+            return ["#{hour}:#{minute}", "#{halfdays[halfday]}"]
+        else
+            return "#{hour}:#{minute} #{halfdays[halfday]}"
 
     clockTo: (clock) ->
-        @clockElement.innerHTML = @humanTime clock
+        [@clockTime.innerHTML, @clockDaypart.innerHTML] = @humanTime clock, true
 
 
 main = ->
@@ -343,10 +347,10 @@ main = ->
     controller.startCallback = =>
         canvas.reset()
         traveller = new Traveller(td, config.originStops, controller.time, segmentCallback)
+        traveller.doneCallback = controller.pause
 
 
     ui = new SimUI(controller)
-    traveller.doneCallback = controller.pause
 
     #controller.start()
 

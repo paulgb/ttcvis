@@ -28,9 +28,27 @@ canvas {
     font-size: 10pt;
 }
 
-#ui_div p#clock_display {
+.clock_display {
     font-size: 30pt;
     margin-top: 10px;
+    z-index: 1;
+    position: absolute;
+    top: 30px;
+    left: 30px;
+    width: 200px;
+    text-shadow: -1px 0 black,
+                 1px 0 black,
+                 0 1px black,
+                 0 -1px black;
+}
+
+#clock_daypart {
+    position: absolute;
+    left: 110px;
+}
+
+#clock_time {
+    position: absolute;
 }
 
 #ui_div a {
