@@ -250,8 +250,7 @@ class SimController
 class SimUI
     constructor: (elementId) ->
         @element = document.getElementById(elementId)
-        @clockElement = document.createElement('span')
-        @element.appendChild(@clockElement)
+        @clockElement = document.getElementById('clock_display')
 
     humanTime: (clock) ->
         days = ['Monday', 'Tuesday']
@@ -268,7 +267,7 @@ class SimUI
         hour = 12 if hour == 0
         minute = Math.floor((clock % ONE_HOUR) / ONE_MINUTE)
         minute = minute = "0" + minute if minute < 10
-        return "#{hour}:#{minute} #{halfdays[halfday]} #{days[day]}"
+        return "#{hour}:#{minute} #{halfdays[halfday]}"
 
     clockTo: (clock) ->
         @clockElement.innerHTML = @humanTime clock
@@ -289,7 +288,7 @@ main = ->
     traveller = new Traveller(td, config.originStops, config.originTime, segmentCallback)
     ui = new SimUI('ui_div')
 
-    controller = new SimController(35500, 1, (clock) ->
+    controller = new SimController(36000, 1, (clock) ->
         canvas.clockTo clock
         traveller.clockTo clock
         ui.clockTo clock

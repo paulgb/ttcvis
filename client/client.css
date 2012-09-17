@@ -2,19 +2,34 @@
 body {
     padding: 0;
     margin: 0;
-    background-color: black;
+    background-color: #001;
     color: white;
+    font-family: 'Orienta', sans-serif;
 }
 
 canvas {
     position: absolute;
     left: 0;
     top: 0;
+    z-index: 0;
 }
 
 #ui_div {
     position: absolute;
-    bottom: 0;
-    right: 0;
+    bottom: 20px;
+    right: 20px;
+    width: 20%;
+    padding: 20px;
+    background-color: rgba(0, 0, 0, 0.6);
+    z-index: 1;
+}
+
+#ui_div p {
+    font-size: 10pt;
+}
+
+#ui_div p#clock_display {
+    font-size: 30pt;
+    margin-top: 10px;
 }
 
