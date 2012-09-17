@@ -82,15 +82,15 @@ class Canvas
     updateClock: (time) =>
         @time = time
 
-    animatePath: (path, startTime, endTime, pathDist=@pathDistance(path), distCovered=0) =>
+    animatePath: (path, startTime, endTime, pathDist=@pathDistance(path), distCovered=0, strokeWidth=1, color='white') =>
         frac = Math.max((@time - startTime) / (endTime - startTime), 1)
         distNeeded = frac * pathDist
         [usePath, savePath] = @cutPath path, distNeeded - distCovered
 
-        @drawPath usePath
+        @drawPath usePath, strokeWidth, color
 
         if (@time < endTime) and savePath.length
-            callback = => @animatePath(savePath, startTime, endTime, pathDist, distCovered)
+            callback = => @animatePath(savePath, startTime, endTime, pathDist, distCovered, color)
             setTimeout(callback, 10)
 
 
@@ -109,33 +109,24 @@ class TransitData
             return [@coords[coord[0]], coord[1]]
 
     decompressSegment: (segment) ->
+        [tripType, coords] = segment
         path = []
-        for coordDescriptor, i in segment
+        for coordDescriptor, i in coords
             [coord, frac] = @getCoord coordDescriptor
             if frac == 1
                 path.push coord
             else
                 if i == 0
-                    [nextCoord,] = @getCoord segment[1]
+                    [nextCoord,] = @getCoord coords[1]
                     prevCoord = coord
                 else
-                    [prevCoord,] = @getCoord segment[i-1]
+                    [prevCoord,] = @getCoord coords[i-1]
                     nextCoord = coord
                 path.push interpolatePair(prevCoord, nextCoord, frac)
-        return path
+        return [tripType, path]
 
     getSegment: (startNode, endNode) ->
         @decompressSegment(@segments[startNode][endNode])
-
-    getSeglist: (n) ->
-        seglist = []
-        i = 0
-        for firstStop, secondStops of @segments
-            for secondStop, segment of secondStops
-                seglist.push @decompressSegment(segment)
-                if n and ++i == n
-                    return seglist
-        return seglist
 
 class Traveller
     constructor: (@td, startNodes, startTime=0, @segmentCallback) ->
@@ -172,8 +163,8 @@ class Traveller
                         if (not @minSoFar.containsKey(nextStop)) or (@minSoFar.get(nextStop) > arrivalTime)
                             @queue.enqueue [arrivalTime, nextStop]
                             @minTimeEdges.set([stop, nextStop], arrivalTime)
-                        segment = @td.getSegment stop, nextStop
-                        @segmentCallback(segment, departureTime, arrivalTime)
+                        [tripType, segment] = @td.getSegment stop, nextStop
+                        @segmentCallback(segment, departureTime, arrivalTime, tripType)
                         break
                     lastDepartureTime = departureTime
     
@@ -194,15 +185,20 @@ main = ->
     cs = new CoordinateSpace(config.viewBox, config.canvasSize, config.aspectRatio)
     canvas = new Canvas('client_canvas', cs)
     td = new TransitData()
+    tripColors = ['red', 'white', null, 'pink']
+    thickness = [1, 3, null, 0.5]
     
-    traveller = new Traveller(td, config.originStops, config.originTime, canvas.animatePath)
+    segmentCallback = (segment, departureTime, arrivalTime, tripType) =>
+        canvas.animatePath(segment, departureTime, arrivalTime, null, null, thickness[tripType], tripColors[tripType])
+
+    traveller = new Traveller(td, config.originStops, config.originTime, segmentCallback)
 
     clockStart = clock = 35500
     timer = new Timer()
     timer.startTimer()
     milis = timer.milis()
     incrClock = ->
-        clock = clockStart + (timer.milis() - milis)
+        clock = clockStart + (timer.milis() - milis) / 10
         canvas.updateClock(clock)
         traveller.clockTo clock
         if clock <= 60000

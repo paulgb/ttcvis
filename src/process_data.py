@@ -55,6 +55,20 @@ def output_dir():
 
 
 @mem.cache
+def get_trip_to_type():
+    route_type = dict()
+    routes = load_csv_data_file('routes')
+    for route in routes:
+        route_type[route['route_id']] = int(route['route_type'])
+
+    trip_type = dict()
+    trips = load_csv_data_file('trips')
+    for trip in trips:
+        trip_type[trip['trip_id']] = route_type[trip['route_id']]
+
+    return trip_type
+
+@mem.cache
 def generate_coords():
     shapes = load_csv_data_file('shapes')
     coords = dict()
@@ -192,25 +206,26 @@ def load_trips_to_shapes(trip_set):
 
 
 @mem.cache
-def get_shapes_to_stop_set(trip_set):
+def get_shapes_to_stop_set(trip_set, trip_types):
     shapes_to_stop_set = dict()
     trips_to_shapes = load_trips_to_shapes(trip_set)
     stop_times = load_csv_data_file('stop_times')
     for trip_id, stops in groupby(stop_times, lambda x: x['trip_id']):
+        trip_type = trip_types[trip_id]
         shape_id = trips_to_shapes[trip_id]
         stop_set = shapes_to_stop_set.setdefault(shape_id, set())
         if trip_id not in trip_set:
             continue
         
-        stop_set.add(tuple((stop['stop_id'], float(stop['shape_dist_traveled'] or 0))
-              for stop in stops))
+        stop_set.add((trip_type, tuple((stop['stop_id'], float(stop['shape_dist_traveled'] or 0))
+              for stop in stops)))
 
     return shapes_to_stop_set
 
 
 @mem.cache
-def get_segments(trip_set, coords):
-    shapes_to_stop_set = get_shapes_to_stop_set(trip_set)
+def get_segments(trip_set, coords, shapes_to_stop_set):
+    shapes_to_stop_set
 
     shapes = load_csv_data_file('shapes')
 
@@ -220,7 +235,7 @@ def get_segments(trip_set, coords):
             ((coords[p['shape_pt_lat'], p['shape_pt_lon']]), float(p['shape_dist_traveled']))
                 for p in points]
 
-        for stops in shapes_to_stop_set[shape_id]:
+        for (trip_type, stops) in shapes_to_stop_set[shape_id]:
             stops = iter(stops)
             points_iter = iter(points_latlon)
 
@@ -261,7 +276,7 @@ def get_segments(trip_set, coords):
                             path.append(next_point)
                             new_path = [next_point]
 
-                        segments.setdefault(previous_stop, dict())[stop_id] = path
+                        segments.setdefault(previous_stop, dict())[stop_id] = (trip_type, path)
 
                         previous_stop = stop_id
 
@@ -288,7 +303,9 @@ def main():
         trip_set = create_trip_set()
 
     if args.output_segments:
-        segments = get_segments(trip_set, coords)
+        trip_types = get_trip_to_type()
+        shapes_to_stop_set = get_shapes_to_stop_set(trip_set, trip_types)
+        segments = get_segments(trip_set, coords, shapes_to_stop_set)
         output_json(segments, 'segments')
 
     if args.output_graph:
