@@ -31,14 +31,14 @@ class Canvas
         @ctx = @canvas.getContext '2d'
         @time = 0
 
-    drawCircle: (point, radius=1, fill='black') =>
+    drawCircle: (point, radius=1, fill='white') =>
         [x, y] = @cs.toPixels(point)
         @ctx.beginPath()
         @ctx.arc(x, y, raduis, 0, 2*Math.PI)
         @ctx.fillStyle = fill
         @ctx.fill()
 
-    drawPath: (path, strokeWidth=1, color='black') =>
+    drawPath: (path, strokeWidth=1, color='white') =>
         @ctx.beginPath()
         for point in path
             [x, y] = @cs.toPixels(point)
