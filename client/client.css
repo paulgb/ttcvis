@@ -33,3 +33,28 @@ canvas {
     margin-top: 10px;
 }
 
+#ui_div a {
+    color: #fcc;
+}
+
+label {
+    font-weight: bold;
+    width: 150px;
+}
+
+.shiftpos {
+    position: absolute;
+    right: 30%;
+}
+
+button, select {
+    background-color: #333;
+    border: 1px solid #555;
+    color: white;
+    border-radius: 1px;
+}
+
+button[disabled] {
+    color: #666;
+}
+

@@ -45,7 +45,7 @@ class CoordinateSpace
             scaleHeight = -scaleHeight
             sigHeight = -1
 
-        if scaleWidth < scaleHeight
+        if scaleWidth > scaleHeight
             srcWidthAdjusted = (@destWidth / scaleHeight) * sigWidth
             srcWidth = srcWidthAdjusted / lonMultiplier
             @leftLon = midLon - (srcWidth / 2)
@@ -213,22 +213,10 @@ class Traveller
             @doneCallback()
             return
     
-class Timer
-    milis: ->
-        date = new Date()
-        date.getTime()
-
-    startTimer: ->
-        @lastMilis = @milis()
-
-    checkTimer: ->
-        return @milis() - @lastMilis
-
 class SimController
-    constructor: (@time, @speed, @callback) ->
-        @clockStart = @time
-        @startMilis = @milis()
+    constructor: (@time, @speed, @tickCallback) ->
         @running = false
+        @started = false
 
     milis: ->
         date = new Date()
@@ -237,10 +225,23 @@ class SimController
     updateClock: =>
         if @running
             @time = @clockStart + (@milis() - @startMilis) * @speed
-            @callback(@time)
+            @tickCallback(@time)
             requestAnimFrame @updateClock
 
-    start: =>
+    step: (delta) =>
+        @time += delta
+        @tickCallback(@time)
+
+    rew: =>
+        @clockStart = @time = 0
+        @tickCallback(@time)
+        @started = false
+        @running = false
+
+    play: =>
+        @clockStart = @time
+        @started = true
+        @startMilis = @milis()
         @running = true
         @updateClock()
 
@@ -248,9 +249,28 @@ class SimController
         @running = false
 
 class SimUI
-    constructor: (elementId) ->
-        @element = document.getElementById(elementId)
+    constructor: (@controller) ->
         @clockElement = document.getElementById('clock_display')
+        @playButton = document.getElementById('play_btn')
+        @rewButton = document.getElementById('rew_btn')
+        @stepButton = document.getElementById('step_btn')
+        @playButton.onclick = =>
+            if @controller.running
+                @playButton.innerText = 'Play'
+                @rewButton.disabled = false
+                @stepButton.disabled = false
+                @controller.pause()
+            else
+                @playButton.innerText = 'Pause'
+                @rewButton.disabled = true
+                @stepButton.disabled = true
+                @controller.play()
+
+        @rewButton.onclick = =>
+            @controller.rew()
+
+        @stepButton.onclick = =>
+            @controller.step 600
 
     humanTime: (clock) ->
         days = ['Monday', 'Tuesday']
@@ -286,7 +306,6 @@ main = ->
         canvas.animatePath(segment, departureTime, arrivalTime, null, null, thickness[tripType], tripColors[tripType])
 
     traveller = new Traveller(td, config.originStops, config.originTime, segmentCallback)
-    ui = new SimUI('ui_div')
 
     controller = new SimController(36000, 1, (clock) ->
         canvas.clockTo clock
@@ -294,7 +313,9 @@ main = ->
         ui.clockTo clock
     )
 
+    ui = new SimUI(controller)
     traveller.doneCallback = controller.pause
-    controller.start()
+
+    #controller.start()
 
 main()
