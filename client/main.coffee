@@ -10,6 +10,21 @@ interpolatePair = ([start1, start2], [end1, end2], fraction) ->
     [interpolate(start1, end1, fraction),
      interpolate(start2, end2, fraction)]
 
+class Meter
+    constructor: (elementId) ->
+        @element = document.getElementById elementId
+        @meters = []
+
+    addMeter: (name, callback) ->
+        meterElement = document.createElement('p')
+        meterElement.innerText = name + ' ' + callback()
+        @element.appendChild meterElement
+        @meters.concat [name, meterElement, callback]
+
+    update: ->
+        for meter in @meters
+            [name, meterElement, callback] = meter
+            meterElement.innerText = name + ' ' + callback()
 
 class CoordinateSpace
     constructor: (viewBox, targetDims) ->
@@ -64,8 +79,10 @@ class Canvas
         animatedPath = [startTime, endTime, path, @pathDistance(path), 0]
         if startTime > @time
             @pendingAnims.enqueue(animatedPath)
+            #console.log 'pendingAnims', @pendingAnims.size()
         else
             @anims[++@animIndex] = animatedPath
+            #console.log 'anims', Object.keys(@anims).length
     
     cutPath: (path, cutDist) ->
         dist = 0
@@ -86,11 +103,13 @@ class Canvas
                 return [beforeCut, afterCut]
             lastPoint = point
             dist += nextDist
+        return [path, []]
             
     updateClock: (time) =>
         @time = time
         while (not @pendingAnims.isEmpty()) and (@pendingAnims.peek()[0] < time)
             @anims[++@animIndex] = @pendingAnims.dequeue
+            #console.log 'anims', Object.keys(@anims).length, 'pendingAnims', @pendingAnims.size()
         for i, anim of @anims
             [startTime, endTime, path, pathDist, distCovered] = anim
             frac = (time - startTime) / (endTime - startTime)
@@ -107,9 +126,9 @@ class Canvas
 
 class TransitData
     constructor: ->
-        #@coords = require('../computed/coords.json')
-        #@segments = require('../computed/segments.json')
-        #@graph = require('../computed/graph.json')
+        @coords = require('../computed/coords.json')
+        @segments = require('../computed/segments.json')
+        @graph = require('../computed/graph.json')
 
     getCoord: (coord) ->
         if coord[0] == undefined
@@ -193,36 +212,39 @@ class Timer
 main = ->
     config = require('../config.json')
 
-    #cs = new CoordinateSpace(config.viewBox, config.canvasSize)
-    cs = new CoordinateSpace([0, 0, 600, 1200], [1200, 600])
+    cs = new CoordinateSpace(config.viewBox, config.canvasSize)
+    #cs = new CoordinateSpace([0, 0, 600, 1200], [1200, 600])
     canvas = new Canvas('client_canvas', cs)
     td = new TransitData()
     
     traveller = new Traveller(td, config.originStops, config.originTime, canvas.animatePath)
 
-    canvas.animatePath([[0, 0], [100, 100], [100, 200], [200, 300]], 0, 100)
+    meter = new Meter('meter')
+    meter.addMeter 'anims_size', -> Object.keys(canvas.anims).length
+    meter.addMeter 'pendingAnims_size', -> canvas.pendingAnims.size()
 
-    x = 0
-    setInterval (-> canvas.updateClock(++x)), 50
+    #canvas.animatePath([[0, 0], [100, 100], [100, 200], [200, 300]], 0, 100)
 
-    ###
+    #x = 0
+    #setInterval (-> canvas.updateClock(++x)), 50
+
     clockStart = clock = 35500
+    meter.addMeter 'clock', clock
     timer = new Timer()
     timer.startTimer()
     milis = timer.milis()
     incrClock = ->
-        if timer.checkTimer() < 1
+        if timer.checkTimer() < 1000
             webkitRequestAnimationFrame incrClock
             return
         timer.startTimer()
-        clock = clockStart + (timer.milis() - milis) / 10
+        clock = clockStart + (timer.milis() - milis)
         canvas.updateClock(clock)
+        meter.update()
         traveller.clockTo clock
         if clock <= 60000
             webkitRequestAnimationFrame incrClock
 
     incrClock()
-    #canvas.drawPath segment for segment in td.getSeglist()
-    ###
 
 main()
