@@ -71,6 +71,9 @@ class Canvas
         @ctx = @canvas.getContext '2d'
         @time = 0
 
+    reset: () =>
+        @ctx.clearRect(0, 0, @canvas.width, @canvas.height)
+
     drawCircle: (point, radius=1, fill='white') =>
         [x, y] = @cs.toPixels(point)
         @ctx.beginPath()
@@ -228,6 +231,9 @@ class SimController
             @tickCallback(@time)
             requestAnimFrame @updateClock
 
+    setSpeed: (@speed) =>
+        @startTime = @time
+
     step: (delta) =>
         @time += delta
         @tickCallback(@time)
@@ -239,10 +245,13 @@ class SimController
         @running = false
 
     play: =>
+        if not @running
+            if @startCallback
+                @startCallback()
         @clockStart = @time
         @started = true
-        @startMilis = @milis()
         @running = true
+        @startMilis = @milis()
         @updateClock()
 
     pause: =>
@@ -254,6 +263,8 @@ class SimUI
         @playButton = document.getElementById('play_btn')
         @rewButton = document.getElementById('rew_btn')
         @stepButton = document.getElementById('step_btn')
+        @speedSelect = document.getElementById('speed')
+
         @playButton.onclick = =>
             if @controller.running
                 @playButton.innerText = 'Play'
@@ -271,6 +282,9 @@ class SimUI
 
         @stepButton.onclick = =>
             @controller.step 600
+
+        @speedSelect.onchange = =>
+            @controller.setSpeed @speedSelect.value
 
     humanTime: (clock) ->
         days = ['Monday', 'Tuesday']
@@ -312,6 +326,7 @@ main = ->
         traveller.clockTo clock
         ui.clockTo clock
     )
+    controller.startCallback = canvas.reset
 
     ui = new SimUI(controller)
     traveller.doneCallback = controller.pause
