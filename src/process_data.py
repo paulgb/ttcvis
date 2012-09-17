@@ -6,6 +6,8 @@ import csv
 from itertools import groupby
 import json
 from collections import defaultdict
+from rtree import index
+from math import cos, pi, sqrt
 
 
 from joblib import Memory
@@ -14,6 +16,10 @@ from joblib import Memory
 CONFIG_FILE = 'config.json'
 
 mem = Memory(join(dirname(__file__), '../cache'))
+
+EARTH_CIRCUMFERENCE = 40075000 # meters
+WALK_DIST = 30 # meters
+WALK_SPEED = 1.35 # meters/s
 
 
 def time_to_seconds(time):
@@ -62,6 +68,55 @@ def generate_coords():
         count = count + 1
 
     return coords
+
+
+@mem.cache
+def generate_walking_graph():
+    stops = load_csv_data_file('stops')
+    stop_index = index.Index()
+
+    walking_graph = {}
+    stop_cache = dict()
+    for stop in stops:
+        stop['stop_id'] = int(stop['stop_id'])
+        stop['stop_lon'] = float(stop['stop_lon'])
+        stop['stop_lat'] = float(stop['stop_lat'])
+        stop_cache[stop['stop_id']] = stop
+        lon = float(stop['stop_lon'])
+        lat = float(stop['stop_lat'])
+        stop_id = stop['stop_id']
+
+        stop_index.insert(stop_id, (lat, lon, lat, lon))
+
+    min_lat, min_lon, max_lat, max_lon = stop_index.bounds
+    mid_lat = (min_lat + max_lat) / 2
+    lon_factor = cos(mid_lat * (pi/180)) ** 2 
+
+    def point_distance((lat1, lon1), (lat2, lon2)):
+        dist = sqrt((lat2 - lat1) ** 2 + (lon_factor * (lon2 - lon1)) ** 2)
+        return dist * EARTH_CIRCUMFERENCE / 360
+
+    def neigbour_bounding_box((lat, lon), distance):
+        lat_bound = (float(distance) / EARTH_CIRCUMFERENCE) * 360
+        lon_bound = lat_bound * lon_factor
+        return (lat - lat_bound, lon - lon_bound, lat + lat_bound, lon + lon_bound)
+
+    for stop_id, stop in stop_cache.iteritems():
+        boundingbox = neigbour_bounding_box((stop['stop_lat'], stop['stop_lon']), WALK_DIST)
+        neighbours = list(stop_index.intersection(boundingbox))
+        for neighbour_id in neighbours:
+            if neighbour_id == stop_id:
+                continue
+            neighbour = stop_cache[neighbour_id]
+            dist = point_distance((stop['stop_lat'],
+                                   stop['stop_lon']),
+                                  (neighbour['stop_lat'],
+                                   neighbour['stop_lon']))
+            duration = int(dist / WALK_SPEED)
+            walking_graph.setdefault(stop_id, list()).append([duration, neighbour['stop_id']])
+
+    return walking_graph
+
 
 
 def output_coords(coords):
@@ -221,6 +276,7 @@ def main():
     parser.add_argument('--output-coords', action='store_true')
     parser.add_argument('--output-segments', action='store_true')
     parser.add_argument('--output-graph', action='store_true')
+    parser.add_argument('--output-walking-graph', action='store_true')
     args = parser.parse_args()
 
     coords = generate_coords()
@@ -238,6 +294,10 @@ def main():
     if args.output_graph:
         graph = create_graph(trip_set)
         output_json(graph, 'graph')
+
+    if args.output_walking_graph:
+        walking_graph = generate_walking_graph()
+        output_json(walking_graph, 'walkinggraph')
 
 if __name__ == '__main__':
     main()

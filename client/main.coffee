@@ -19,8 +19,6 @@ class CoordinateSpace
         @lonRange = Math.round(@latRange * @width * @aspectRatio / @height, 2)
         @leftLon = Math.round(lonMid - @lonRange / 2, 2)
 
-        console.log(@topLat, @leftLon, bottomLat, rightLon)
-
     toPixels: ([coordLat, coordLon]) ->
         [@width * (coordLon - @leftLon) / @lonRange,
          @height * (coordLat - @topLat) / @latRange]
@@ -101,6 +99,7 @@ class TransitData
         @coords = require('../computed/coords.json')
         @segments = require('../computed/segments.json')
         @graph = require('../computed/graph.json')
+        @walkingGraph = require('../computed/walkinggraph.json')
 
     getCoord: (coord) ->
         if coord[0] == undefined
@@ -156,6 +155,12 @@ class Traveller
 
             if stop not of @td.graph
                 continue
+
+            for neighbour in @td.walkingGraph[stop] ? []
+                [duration, nextStop] = neighbour
+                arrivalTime = time + duration
+                if (not @minSoFar.containsKey(nextStop)) or (@minSoFar.get(nextStop) > arrivalTime)
+                    @queue.enqueue [arrivalTime, nextStop]
 
             for nextStop, times of @td.graph[stop]
                 lastDepartureTime = 0
