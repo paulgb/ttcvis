@@ -177,6 +177,9 @@ class Traveller
                         @segmentCallback(segment, departureTime, arrivalTime, tripType)
                         break
                     lastDepartureTime = departureTime
+        if @queue.isEmpty()
+            @doneCallback()
+            return
     
 class Timer
     milis: ->
@@ -193,16 +196,50 @@ class SimController
     constructor: (@time, @speed, @callback) ->
         @clockStart = @time
         @startMilis = @milis()
-        @updateClock()
+        @running = false
 
     milis: ->
         date = new Date()
         date.getTime()
 
     updateClock: =>
-        @time = @clockStart + (@milis() - @startMilis) * @speed
-        @callback(@time)
-        requestAnimFrame @updateClock
+        if @running
+            @time = @clockStart + (@milis() - @startMilis) * @speed
+            @callback(@time)
+            requestAnimFrame @updateClock
+
+    start: =>
+        @running = true
+        @updateClock()
+
+    pause: =>
+        @running = false
+
+class SimUI
+    constructor: (elementId) ->
+        @element = document.getElementById(elementId)
+        @clockElement = document.createElement('span')
+        @element.appendChild(@clockElement)
+
+    humanTime: (clock) ->
+        days = ['Monday', 'Tuesday']
+        halfdays = ['AM', 'PM']
+        
+        ONE_MINUTE = 60
+        ONE_HOUR = 60 * ONE_MINUTE
+        ONE_HALFDAY = 12 * ONE_HOUR
+        ONE_DAY = 2 * ONE_HALFDAY
+
+        day = Math.floor(clock / ONE_DAY)
+        halfday = Math.floor((clock % ONE_DAY) / ONE_HALFDAY)
+        hour = Math.floor((clock % ONE_HALFDAY) / ONE_HOUR) % ONE_HALFDAY
+        hour = 12 if hour == 0
+        minute = Math.floor((clock % ONE_HOUR) / ONE_MINUTE)
+        minute = minute = "0" + minute if minute < 10
+        return "#{hour}:#{minute} #{halfdays[halfday]} #{days[day]}"
+
+    clockTo: (clock) ->
+        @clockElement.innerHTML = @humanTime clock
 
 
 main = ->
@@ -218,10 +255,15 @@ main = ->
         canvas.animatePath(segment, departureTime, arrivalTime, null, null, thickness[tripType], tripColors[tripType])
 
     traveller = new Traveller(td, config.originStops, config.originTime, segmentCallback)
+    ui = new SimUI('ui_div')
 
     controller = new SimController(35500, 1, (clock) ->
         canvas.clockTo clock
         traveller.clockTo clock
+        ui.clockTo clock
     )
+
+    traveller.doneCallback = controller.pause
+    controller.start()
 
 main()
