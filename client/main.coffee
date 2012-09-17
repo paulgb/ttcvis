@@ -10,6 +10,16 @@ interpolatePair = ([start1, start2], [end1, end2], fraction) ->
     [interpolate(start1, end1, fraction),
      interpolate(start2, end2, fraction)]
 
+# coffeescript port of Paul Irish's requestAnimFrame shim
+# http://paulirish.com/2011/requestanimationframe-for-smart-animating/
+requestAnimFrame =
+    window.requestAnimationFrame       ?
+    window.webkitRequestAnimationFrame ?
+    window.mozRequestAnimationFrame    ?
+    window.oRequestAnimationFrame      ?
+    window.msRequestAnimationFrame     ?
+    (callback -> window.setTimeout callback, 1000 / 60)
+
 class CoordinateSpace
     constructor: (viewBox, targetDims, @aspectRatio) ->
         [@width, @height] = targetDims
@@ -79,7 +89,7 @@ class Canvas
             dist += nextDist
         return [path, []]
             
-    updateClock: (time) =>
+    clockTo: (time) =>
         @time = time
 
     animatePath: (path, startTime, endTime, pathDist=@pathDistance(path), distCovered=0, strokeWidth=1, color='white') =>
@@ -179,6 +189,22 @@ class Timer
     checkTimer: ->
         return @milis() - @lastMilis
 
+class SimController
+    constructor: (@time, @speed, @callback) ->
+        @clockStart = @time
+        @startMilis = @milis()
+        @updateClock()
+
+    milis: ->
+        date = new Date()
+        date.getTime()
+
+    updateClock: =>
+        @time = @clockStart + (@milis() - @startMilis) * @speed
+        @callback(@time)
+        requestAnimFrame @updateClock
+
+
 main = ->
     config = require('../config.json')
 
@@ -193,17 +219,9 @@ main = ->
 
     traveller = new Traveller(td, config.originStops, config.originTime, segmentCallback)
 
-    clockStart = clock = 35500
-    timer = new Timer()
-    timer.startTimer()
-    milis = timer.milis()
-    incrClock = ->
-        clock = clockStart + (timer.milis() - milis) / 10
-        canvas.updateClock(clock)
+    controller = new SimController(35500, 1, (clock) ->
+        canvas.clockTo clock
         traveller.clockTo clock
-        if clock <= 60000
-            webkitRequestAnimationFrame incrClock
-
-    incrClock()
+    )
 
 main()
