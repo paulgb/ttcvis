@@ -10,22 +10,6 @@ interpolatePair = ([start1, start2], [end1, end2], fraction) ->
     [interpolate(start1, end1, fraction),
      interpolate(start2, end2, fraction)]
 
-class Meter
-    constructor: (elementId) ->
-        @element = document.getElementById elementId
-        @meters = []
-
-    addMeter: (name, callback) ->
-        meterElement = document.createElement('p')
-        meterElement.innerText = name + ' ' + callback()
-        @element.appendChild meterElement
-        @meters.concat [name, meterElement, callback]
-
-    update: ->
-        for meter in @meters
-            [name, meterElement, callback] = meter
-            meterElement.innerText = name + ' ' + callback()
-
 class CoordinateSpace
     constructor: (viewBox, targetDims) ->
         [@width, @height] = targetDims
@@ -41,9 +25,6 @@ class Canvas
     constructor: (canvasId, @cs) ->
         @canvas = document.getElementById canvasId
         @ctx = @canvas.getContext '2d'
-        @pendingAnims = new PriorityQueue(lowFirst)
-        @anims = {}
-        @animIndex = 0
         @time = 0
 
     drawCircle: (point, radius=1, fill='black') =>
@@ -74,15 +55,6 @@ class Canvas
             dist += @euclidean lastPoint, point
             lastPoint = point
         return dist
-
-    animatePath: (path, startTime, endTime) =>
-        animatedPath = [startTime, endTime, path, @pathDistance(path), 0]
-        if startTime > @time
-            @pendingAnims.enqueue(animatedPath)
-            #console.log 'pendingAnims', @pendingAnims.size()
-        else
-            @anims[++@animIndex] = animatedPath
-            #console.log 'anims', Object.keys(@anims).length
     
     cutPath: (path, cutDist) ->
         dist = 0
@@ -107,21 +79,17 @@ class Canvas
             
     updateClock: (time) =>
         @time = time
-        while (not @pendingAnims.isEmpty()) and (@pendingAnims.peek()[0] < time)
-            @anims[++@animIndex] = @pendingAnims.dequeue
-            #console.log 'anims', Object.keys(@anims).length, 'pendingAnims', @pendingAnims.size()
-        for i, anim of @anims
-            [startTime, endTime, path, pathDist, distCovered] = anim
-            frac = (time - startTime) / (endTime - startTime)
-            distNeeded = frac * pathDist
-            [usePath, savePath] = @cutPath path, distNeeded - distCovered
 
-            @drawPath usePath
-            anim[2] = savePath
-            anim[4] = distNeeded
+    animatePath: (path, startTime, endTime, pathDist=@pathDistance(path), distCovered=0) =>
+        frac = Math.max((@time - startTime) / (endTime - startTime), 1)
+        distNeeded = frac * pathDist
+        [usePath, savePath] = @cutPath path, distNeeded - distCovered
 
-            if time >= endTime
-                delete @anims[i]
+        @drawPath usePath
+
+        if (@time < endTime) and savePath.length
+            callback = => @animatePath(savePath, startTime, endTime, pathDist, distCovered)
+            setTimeout(callback, 10)
 
 
 class TransitData
@@ -219,28 +187,22 @@ main = ->
     
     traveller = new Traveller(td, config.originStops, config.originTime, canvas.animatePath)
 
-    meter = new Meter('meter')
-    meter.addMeter 'anims_size', -> Object.keys(canvas.anims).length
-    meter.addMeter 'pendingAnims_size', -> canvas.pendingAnims.size()
-
     #canvas.animatePath([[0, 0], [100, 100], [100, 200], [200, 300]], 0, 100)
 
     #x = 0
     #setInterval (-> canvas.updateClock(++x)), 50
 
     clockStart = clock = 35500
-    meter.addMeter 'clock', clock
     timer = new Timer()
     timer.startTimer()
     milis = timer.milis()
     incrClock = ->
-        if timer.checkTimer() < 1000
+        if timer.checkTimer() < 10
             webkitRequestAnimationFrame incrClock
             return
         timer.startTimer()
-        clock = clockStart + (timer.milis() - milis)
+        clock = clockStart + (timer.milis() - milis) / 10
         canvas.updateClock(clock)
-        meter.update()
         traveller.clockTo clock
         if clock <= 60000
             webkitRequestAnimationFrame incrClock
