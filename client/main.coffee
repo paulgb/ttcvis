@@ -11,11 +11,15 @@ interpolatePair = ([start1, start2], [end1, end2], fraction) ->
      interpolate(start2, end2, fraction)]
 
 class CoordinateSpace
-    constructor: (viewBox, targetDims) ->
+    constructor: (viewBox, targetDims, @aspectRatio) ->
         [@width, @height] = targetDims
-        [@topLat, @leftLon, bottomLat, rightLon] = viewBox
-        @lonRange = rightLon - @leftLon
+        [@topLat, leftLon, bottomLat, rightLon] = viewBox
         @latRange = bottomLat - @topLat
+        lonMid = (leftLon + rightLon) / 2
+        @lonRange = Math.round(@latRange * @width * @aspectRatio / @height, 2)
+        @leftLon = Math.round(lonMid - @lonRange / 2, 2)
+
+        console.log(@topLat, @leftLon, bottomLat, rightLon)
 
     toPixels: ([coordLat, coordLon]) ->
         [@width * (coordLon - @leftLon) / @lonRange,
@@ -182,7 +186,7 @@ class Timer
 main = ->
     config = require('../config.json')
 
-    cs = new CoordinateSpace(config.viewBox, config.canvasSize)
+    cs = new CoordinateSpace(config.viewBox, config.canvasSize, config.aspectRatio)
     canvas = new Canvas('client_canvas', cs)
     td = new TransitData()
     
