@@ -22,7 +22,7 @@ requestAnimFrame =
 
 class CoordinateSpace
     constructor: (viewBox) ->
-        [@bottomLat, @leftLon, @topLat, @rightLon] = viewBox
+        [@bottomLat, @leftLon, @topLat, @rightLon, @innerExpand] = viewBox
 
     apply: (targetDims) ->
         [@destWidth, @destHeight] = targetDims
@@ -45,7 +45,7 @@ class CoordinateSpace
             scaleHeight = -scaleHeight
             sigHeight = -1
 
-        if scaleWidth > scaleHeight
+        if (scaleWidth < scaleHeight) == @innerExpand
             srcWidthAdjusted = (@destWidth / scaleHeight) * sigWidth
             srcWidth = srcWidthAdjusted / lonMultiplier
             @leftLon = midLon - (srcWidth / 2)
@@ -63,13 +63,15 @@ class CoordinateSpace
          @destHeight * (coordLat - @topLat) / @latRange]
 
 class Canvas
-    constructor: (canvasId, @cs) ->
+    constructor: (canvasId) ->
         @canvas = document.getElementById canvasId
         @canvas.width = window.innerWidth
         @canvas.height = window.innerHeight
-        @cs.apply [@canvas.width, @canvas.height]
         @ctx = @canvas.getContext '2d'
         @time = 0
+
+    setCoordinateSpace: (@cs) ->
+        @cs.apply [@canvas.width, @canvas.height]
 
     reset: () =>
         @ctx.clearRect(0, 0, @canvas.width, @canvas.height)
@@ -244,12 +246,12 @@ class SimController
 
     rew: (@time) =>
         @clockStart = @time
-        @tickCallback(@time)
         @started = false
         @running = false
+        @startCallback()
 
     play: =>
-        if not @running
+        if not @started
             if @startCallback
                 @startCallback()
         @clockStart = @time
@@ -262,7 +264,7 @@ class SimController
         @running = false
 
 class SimUI
-    constructor: (@controller) ->
+    constructor: (@controller, @viewBoxes) ->
         @clockTime = document.getElementById('clock_time')
         @clockDaypart = document.getElementById('clock_daypart')
         @playButton = document.getElementById('play_btn')
@@ -270,6 +272,13 @@ class SimUI
         @stepButton = document.getElementById('step_btn')
         @speedSelect = document.getElementById('speed')
         @startSelect = document.getElementById('startTime')
+        @zoomSelect = document.getElementById('zoom')
+
+        for name, dims of @viewBoxes
+            option = document.createElement('option')
+            option.innerHTML = name
+            option.value = name
+            @zoomSelect.appendChild(option)
 
         for time in [16...40]
             startTime = time * 1800
@@ -285,8 +294,9 @@ class SimUI
                 @stepButton.disabled = false
                 @controller.pause()
             else
-                if not @controller.paused
+                if not @controller.started
                     @controller.setTime parseInt(@startSelect.value)
+                    @onViewbox(@viewBoxes[@zoomSelect.value])
                 @playButton.innerText = 'Pause'
                 @rewButton.disabled = true
                 @stepButton.disabled = true
@@ -328,8 +338,9 @@ class SimUI
 main = ->
     config = require('../config.json')
 
-    cs = new CoordinateSpace(config.viewBox)
-    canvas = new Canvas('client_canvas', cs)
+    #cs = new CoordinateSpace(config.viewBox)
+    #canvas = new Canvas('client_canvas', cs)
+    canvas = new Canvas('client_canvas')
     td = new TransitData()
     tripColors = ['red', 'white', null, 'pink']
     thickness = [1, 3, null, 0.5]
@@ -349,8 +360,10 @@ main = ->
         traveller = new Traveller(td, config.originStops, controller.time, segmentCallback)
         traveller.doneCallback = controller.pause
 
-
-    ui = new SimUI(controller)
+    ui = new SimUI(controller, config.viewBoxes)
+    ui.onViewbox = (viewbox) =>
+        cs = new CoordinateSpace(viewbox)
+        canvas.setCoordinateSpace cs
 
     #controller.start()
 

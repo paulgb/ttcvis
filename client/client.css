@@ -80,3 +80,7 @@ button[disabled] {
     color: #666;
 }
 
+button:active {
+    color: #444;
+}
+
