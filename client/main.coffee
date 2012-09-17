@@ -21,26 +21,21 @@ requestAnimFrame =
     (callback -> window.setTimeout callback, 1000 / 60)
 
 class CoordinateSpace
-    constructor: (viewBox, targetDims) ->
-        [@destWidth, @destHeight] = targetDims
+    constructor: (viewBox) ->
         [@bottomLat, @leftLon, @topLat, @rightLon] = viewBox
 
+    apply: (targetDims) ->
+        [@destWidth, @destHeight] = targetDims
         midLon = (@leftLon + @rightLon) / 2
         midLat = (@topLat + @bottomLat) / 2
-        console.log 'midLon', midLon
         lonMultiplier = Math.pow(Math.cos(midLat * (Math.PI/180)), 2)
-        console.log 'lonMultiplier', lonMultiplier
 
         srcWidth = (@rightLon - @leftLon)
         srcWidthAdjusted = srcWidth * lonMultiplier
-        console.log 'srcWidthAdjusted', srcWidthAdjusted
         srcHeight = (@topLat - @bottomLat)
-        console.log 'srcHeight', srcHeight
 
         scaleWidth = @destWidth / srcWidthAdjusted
         scaleHeight = @destHeight / srcHeight
-        console.log 'scaleWidth', scaleWidth
-        console.log 'scaleHeight', scaleHeight
 
         sigWidth = sigHeight = 1
         if scaleWidth < 0
@@ -50,12 +45,9 @@ class CoordinateSpace
             scaleHeight = -scaleHeight
             sigHeight = -1
 
-        if scaleWidth > scaleHeight
-            console.log 'scaleWidth > scaleHeight'
+        if scaleWidth < scaleHeight
             srcWidthAdjusted = (@destWidth / scaleHeight) * sigWidth
-            console.log 'srcWidthAdjusted', srcWidthAdjusted
             srcWidth = srcWidthAdjusted / lonMultiplier
-            console.log 'srcWidth', srcWidth
             @leftLon = midLon - (srcWidth / 2)
             @rightLon = midLon + (srcWidth / 2)
         else
@@ -63,20 +55,19 @@ class CoordinateSpace
             @topLat = midLat + (srcHeight / 2)
             @bottomLat = midLat - (srcHeight / 2)
         
-        @lonRange = @leftLon - @rightLon
+        @lonRange = @rightLon - @leftLon
         @latRange = @bottomLat - @topLat
-        console.log(this)
-
 
     toPixels: ([coordLat, coordLon]) ->
-        m = [@destWidth * (coordLon - @rightLon) / @lonRange,
+        [@destWidth * (coordLon - @leftLon) / @lonRange,
          @destHeight * (coordLat - @topLat) / @latRange]
-        #console.log 'toPixels', [coordLat, coordLon], m
-        return m
 
 class Canvas
     constructor: (canvasId, @cs) ->
         @canvas = document.getElementById canvasId
+        @canvas.width = window.innerWidth
+        @canvas.height = window.innerHeight
+        @cs.apply [@canvas.width, @canvas.height]
         @ctx = @canvas.getContext '2d'
         @time = 0
 
@@ -286,7 +277,7 @@ class SimUI
 main = ->
     config = require('../config.json')
 
-    cs = new CoordinateSpace(config.viewBox, [1200, 600])
+    cs = new CoordinateSpace(config.viewBox)
     canvas = new Canvas('client_canvas', cs)
     td = new TransitData()
     tripColors = ['red', 'white', null, 'pink']
