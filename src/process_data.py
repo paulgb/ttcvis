@@ -48,14 +48,6 @@ def output_dir():
     return computed_dir
 
 
-def stops_to_svg():
-    stops = load_csv_data_file('stops')
-    fh = file('stops.svg', 'w')
-    print >> fh, '<svg xmlns="http://www.w3.org/2000/svg" version="1.1">'
-    for stop in stops:
-        print >> fh, '<circle cx="%s" cy="%s" r="0.1" fill="red" title="%s"/>' % (float(stop['stop_lon'])*-1000, float(stop['stop_lat'])*1000, stop['stop_name'].replace('&', '&amp;'))
-    print >> fh, '</svg>'
-
 @mem.cache
 def generate_coords():
     shapes = load_csv_data_file('shapes')
@@ -231,8 +223,6 @@ def main():
     parser.add_argument('--output-graph', action='store_true')
     args = parser.parse_args()
 
-    stops_to_svg()
-    return
     coords = generate_coords()
     
     if args.output_coords:
