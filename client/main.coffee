@@ -234,12 +234,16 @@ class SimController
     setSpeed: (@speed) =>
         @startTime = @time
 
+    setTime: (@time) =>
+        @clockStart = @time
+
     step: (delta) =>
+        @started = true
         @time += delta
         @tickCallback(@time)
 
-    rew: =>
-        @clockStart = @time = 0
+    rew: (@time) =>
+        @clockStart = @time
         @tickCallback(@time)
         @started = false
         @running = false
@@ -264,6 +268,14 @@ class SimUI
         @rewButton = document.getElementById('rew_btn')
         @stepButton = document.getElementById('step_btn')
         @speedSelect = document.getElementById('speed')
+        @startSelect = document.getElementById('startTime')
+
+        for time in [16...40]
+            startTime = time * 1800
+            option = document.createElement('option')
+            option.innerHTML = @humanTime(startTime)
+            option.value = startTime
+            @startSelect.appendChild(option)
 
         @playButton.onclick = =>
             if @controller.running
@@ -272,13 +284,15 @@ class SimUI
                 @stepButton.disabled = false
                 @controller.pause()
             else
+                if not @controller.paused
+                    @controller.setTime parseInt(@startSelect.value)
                 @playButton.innerText = 'Pause'
                 @rewButton.disabled = true
                 @stepButton.disabled = true
                 @controller.play()
 
         @rewButton.onclick = =>
-            @controller.rew()
+            @controller.rew parseInt(@startSelect.value)
 
         @stepButton.onclick = =>
             @controller.step 600
@@ -319,14 +333,17 @@ main = ->
     segmentCallback = (segment, departureTime, arrivalTime, tripType) =>
         canvas.animatePath(segment, departureTime, arrivalTime, null, null, thickness[tripType], tripColors[tripType])
 
-    traveller = new Traveller(td, config.originStops, config.originTime, segmentCallback)
-
+    traveller = null
     controller = new SimController(36000, 1, (clock) ->
         canvas.clockTo clock
         traveller.clockTo clock
         ui.clockTo clock
     )
-    controller.startCallback = canvas.reset
+
+    controller.startCallback = =>
+        canvas.reset()
+        traveller = new Traveller(td, config.originStops, controller.time, segmentCallback)
+
 
     ui = new SimUI(controller)
     traveller.doneCallback = controller.pause
