@@ -186,6 +186,7 @@ def create_graph(trip_set):
 
     return graph
 
+
 @mem.cache
 def get_stops():
     stops = load_csv_data_file('stops')
@@ -195,6 +196,7 @@ def get_stops():
         stop['stop_name'],
         stop['stop_lat'],
         stop['stop_lon']) for stop in stops)
+
 
 @mem.cache
 def load_trips_to_shapes(trip_set):

@@ -4,12 +4,7 @@
       "Fit": [43.59, -79.65, 43.92, -79.12, false],
       "Fill": [43.59, -79.65, 43.82, -79.12, true]
   },
-  "originStops": [
-    2332,
-    6108,
-    8510,
-    8672,
-    13975
-  ],
-  "originTime": 17750
+  "originStop": 2332,
+  "originStops": [2332],
+  "originTime": 28800
 }

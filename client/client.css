@@ -84,3 +84,10 @@ button:active {
     color: #444;
 }
 
+#stop_info {
+    text-align: right;
+    position: absolute;
+    right: 30px;
+    top: 30px;
+}
+

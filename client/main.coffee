@@ -1,5 +1,6 @@
 
 {Dictionary, PriorityQueue, defaultCompare} = require('../lib/buckets.js')
+{kdTree} = require('../lib/kdTree.js')
 
 lowFirst = ([a,], [b,]) -> defaultCompare(b, a)
 
@@ -9,6 +10,12 @@ interpolate = (start, end, fraction) ->
 interpolatePair = ([start1, start2], [end1, end2], fraction) ->
     [interpolate(start1, end1, fraction),
      interpolate(start2, end2, fraction)]
+
+pointDist = (pt1, pt2) ->
+    midLat = (pt1.lat + pt2.lat) / 2
+    lonFactor = Math.pow(Math.cos(midLat * (Math.PI / 180)), 2)
+    dist = Math.sqrt(Math.pow(pt2.lat - pt1.lat, 2) + Math.pow(lonFactor * (pt2.lon - pt1.lon), 2))
+    return dist
 
 # coffeescript port of Paul Irish's requestAnimFrame shim
 # http://paulirish.com/2011/requestanimationframe-for-smart-animating/
@@ -57,6 +64,10 @@ class CoordinateSpace
         
         @lonRange = @rightLon - @leftLon
         @latRange = @bottomLat - @topLat
+
+    toCoords: ([x, y]) ->
+        [(y * @latRange / @destHeight) + @topLat,
+         (x * @lonRange / @destWidth) + @leftLon]
 
     toPixels: ([coordLat, coordLon]) ->
         [@destWidth * (coordLon - @leftLon) / @lonRange,
@@ -147,6 +158,10 @@ class TransitData
         @segments = require('../computed/segments.json')
         @graph = require('../computed/graph.json')
         @walkingGraph = require('../computed/walkinggraph.json')
+        stops = require('../computed/stops.json')
+        
+        @stops = [@decompressStop(stop) for stop in stops][0]
+        @stopsTree = new kdTree(@stops, pointDist, ['lat', 'lon'])
 
     getCoord: (coord) ->
         if coord[0] == undefined
@@ -154,6 +169,15 @@ class TransitData
             return [@coords[coordId], 1]
         else
             return [@coords[coord[0]], coord[1]]
+
+    decompressStop: (stop) ->
+        stop =
+            id: stop[0]
+            code: stop[1]
+            name: stop[2]
+            lat: parseFloat(stop[3])
+            lon: parseFloat(stop[4])
+        return stop
 
     decompressSegment: (segment) ->
         [tripType, coords] = segment
@@ -176,13 +200,12 @@ class TransitData
         @decompressSegment(@segments[startNode][endNode])
 
 class Traveller
-    constructor: (@td, startNodes, startTime=0, @segmentCallback) ->
+    constructor: (@td, startNode, startTime=0, @segmentCallback) ->
         @minTimes = new Dictionary()
         @minTimeEdges = new Dictionary()
         @queue = new PriorityQueue(lowFirst)
         @minSoFar = new Dictionary()
-        for node in startNodes
-            @queue.enqueue [startTime, node]
+        @queue.enqueue [startTime, startNode]
 
     clockTo: (clockTime) ->
         while (not @queue.isEmpty()) and (@queue.peek()[0] <= clockTime)
@@ -337,15 +360,35 @@ class SimUI
         [@clockTime.innerHTML, @clockDaypart.innerHTML] = @humanTime clock, true
 
 
+class InfoBox
+    constructor: (@canvas, @td, @ui, @traveller) ->
+        @boxElement = document.getElementById('stop_info')
+        @nameElement = document.getElementById('stop_name')
+        @reachedElement = document.getElementById('stop_reached')
+
+    updateInfoBox: (e) =>
+        [lat, lon] = @canvas.cs.toCoords([e.clientX, e.clientY])
+        [[point, dist]] = @td.stopsTree.nearest({lat: lat, lon: lon}, 1)
+        if dist < 0.005
+            @nameElement.innerHTML = point.name
+            minTime = @traveller.minTimes.get point.id
+            if minTime != undefined
+                @reachedElement.innerText = 'Time reached ' + @ui.humanTime minTime
+            else
+                @reachedElement.innerText = 'Not yet reached'
+            @boxElement.style.display = ''
+        else
+            @boxElement.style.display = 'none'
+
+
 main = ->
     config = require('../config.json')
 
-    #cs = new CoordinateSpace(config.viewBox)
-    #canvas = new Canvas('client_canvas', cs)
     canvas = new Canvas('client_canvas')
     td = new TransitData()
     tripColors = ['red', 'white', null, 'pink']
     thickness = [1, 3, null, 0.5]
+    infobox = new InfoBox(canvas, td)
     
     segmentCallback = (segment, departureTime, arrivalTime, tripType) =>
         canvas.animatePath(segment, departureTime, arrivalTime, null, null, thickness[tripType], tripColors[tripType])
@@ -359,14 +402,19 @@ main = ->
 
     controller.startCallback = =>
         canvas.reset()
-        traveller = new Traveller(td, config.originStops, controller.time, segmentCallback)
+        traveller = new Traveller(td, config.originStop, controller.time, segmentCallback)
         traveller.doneCallback = controller.pause
+        infobox.traveller = traveller
 
     ui = new SimUI(controller, config.viewBoxes)
+    infobox.ui = ui
+
     ui.onViewbox = (viewbox) =>
         cs = new CoordinateSpace(viewbox)
         canvas.setCoordinateSpace cs
 
-    #controller.start()
+        canvas.canvas.onmousemove = infobox.updateInfoBox
+
+        
 
 main()
