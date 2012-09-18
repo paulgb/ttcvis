@@ -13,11 +13,6 @@
             <p>By tracing all possible trips originating at a particular origin point, this tool allows you to explore which areas of Toronto are best &ndash; and worst &ndash; served by transit.</p>
             <p>Select some options and hit the play button to get started!</p>
             <p>
-                <label for="zoom">Zoom Level</label>
-                <select class="shiftpos" id="zoom">
-                </select>
-            </p>
-            <p>
                 <label for="speed">Speed</label>
                 <select class="shiftpos" id="speed">
                     <option value="1">1000x</option>
@@ -32,11 +27,17 @@
                 </select>
             </p>
             <p>
+                <label for="zoom">Zoom Level</label>
+                <select class="shiftpos" id="zoom">
+                </select>
+            </p>
+            <p>
                 <label for="speed">Origin</label>
                 <span class="shiftpos">
                 Queen at Yonge
                 </span>
             </p>
+            <p><em>Rewind to apply settings if simulation is started</em></p>
             <p>
                 <button id="play_btn">Play</button>
                 <button id="rew_btn" disabled="disabled">Rewind</button>

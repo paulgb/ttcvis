@@ -240,6 +240,9 @@ class SimController
         @clockStart = @time
 
     step: (delta) =>
+        if not @started
+            if @startCallback
+                @startCallback()
         @started = true
         @time += delta
         @tickCallback(@time)
@@ -248,7 +251,6 @@ class SimController
         @clockStart = @time
         @started = false
         @running = false
-        @startCallback()
 
     play: =>
         if not @started

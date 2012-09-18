@@ -166,8 +166,6 @@ def create_graph(trip_set):
             continue
         previous_stop = stops.next()
         for stop in stops:
-            if time_to_seconds(stop['arrival_time']) > 60000:
-                break
             graph.setdefault(int(previous_stop['stop_id']), dict()) \
                  .setdefault(int(stop['stop_id']), list()) \
                  .append([
@@ -189,10 +187,14 @@ def create_graph(trip_set):
     return graph
 
 @mem.cache
-def load_stops():
+def get_stops():
     stops = load_csv_data_file('stops')
-    return dict((stop['stop_id'], stop) for stop in stops)
-
+    return list((
+        stop['stop_id'],
+        stop['stop_code'],
+        stop['stop_name'],
+        stop['stop_lat'],
+        stop['stop_lon']) for stop in stops)
 
 @mem.cache
 def load_trips_to_shapes(trip_set):
@@ -292,6 +294,7 @@ def main():
     parser.add_argument('--output-segments', action='store_true')
     parser.add_argument('--output-graph', action='store_true')
     parser.add_argument('--output-walking-graph', action='store_true')
+    parser.add_argument('--output-stops', action='store_true')
     args = parser.parse_args()
 
     coords = generate_coords()
@@ -315,6 +318,10 @@ def main():
     if args.output_walking_graph:
         walking_graph = generate_walking_graph()
         output_json(walking_graph, 'walkinggraph')
+
+    if args.output_stops:
+        stops = get_stops()
+        output_json(stops, 'stops')
 
 if __name__ == '__main__':
     main()

@@ -1,7 +1,7 @@
 
 all : dist/main.js
 
-dist/main.js : client/main.coffee computed/graph.json computed/segments.json computed/coords.json
+dist/main.js : client/main.coffee computed/graph.json computed/segments.json computed/coords.json computed/walkinggraph.json computed/stops.json
 	mkdir -p dist ;\
 	browserify -d -o dist/main.js -e client/main.coffee
 
@@ -13,6 +13,12 @@ computed/segments.json : data
 
 computed/coords.json : data 
 	python src/process_data.py --output-coords
+
+computed/walkinggraph.json : data
+	python src/process_data.py --output-walking-graph
+
+computed/stops.json : data
+	python src/process_data.py --output-stops
 
 data : downloads/OpenData_TTC_Schedules.zip
 	mkdir -p data ;\
