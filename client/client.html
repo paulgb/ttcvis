@@ -14,7 +14,7 @@
         </div>
         <div id="ui_div" style="width: 20%">
             <p>Toronto's <strong>subways</strong>, <span style="color: red;">streetcars</span>, and <span style="color: pink">bus routes</span> combine to make the TTC the third largest transit system in North&nbsp;America.<sup><a href="http://www.ttc.ca/Riding_the_TTC/index.jsp">1</a></sup></p>
-            <p>By tracing all possible trips originating at a particular origin point, this tool allows you to explore which areas of Toronto are best &ndash; and worst &ndash; served by transit.</p>
+            <p>By tracing all possible trips originating at a particular stop, this tool allows you to explore which areas of Toronto are best &ndash; and worst &ndash; served by transit.</p>
             <p>Select some options and hit the play button to get started!</p>
             <p>
                 <label for="speed">Speed</label>
@@ -40,16 +40,16 @@
                 <small class="shiftpos" id="stopid"></small>
                 </span>
             </p>
-            <p><em>Rewind to apply settings if simulation is started</em></p>
             <p>
                 <button id="play_btn">Play</button>
                 <button id="rew_btn" disabled="disabled">Rewind</button>
                 <button id="step_btn" disabled="disabled">Step</button>
             </p>
+            <p><em>Rewind to apply settings if started. Click a stop to select it as the next origin.</em></p>
             <p>Created by Paul Butler for <a href="http://kontagent.com">Kontagent</a>'s <a href="http://na-m.marketo.com/lp/kontagent/CodingChallengeLP.html">Big Data Challenge</a> in September 2012</p>
         </div>
         <canvas id="client_canvas">
         </canvas>
-        <script src="../dist/main.js"></script>
+        <script src="main.js"></script>
     </body>
 </html>

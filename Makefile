@@ -1,5 +1,11 @@
 
-all : dist/main.js
+all : dist/main.js dist/client.html dist/client.css
+
+dist/client.html : client/client.html
+	cp client/client.html dist/client.html
+
+dist/client.css : client/client.css
+	cp client/client.css dist/client.css
 
 dist/main.js : client/main.coffee computed/graph.json computed/segments.json computed/coords.json computed/walkinggraph.json computed/stops.json
 	mkdir -p dist ;\
