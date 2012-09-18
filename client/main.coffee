@@ -289,7 +289,7 @@ class SimController
         @running = false
 
 class SimUI
-    constructor: (@controller, @viewBoxes) ->
+    constructor: (@controller, @viewBoxes, @stop) ->
         @clockTime = document.getElementById('clock_time')
         @clockDaypart = document.getElementById('clock_daypart')
         @playButton = document.getElementById('play_btn')
@@ -298,6 +298,8 @@ class SimUI
         @speedSelect = document.getElementById('speed')
         @startSelect = document.getElementById('startTime')
         @zoomSelect = document.getElementById('zoom')
+        @stopElement = document.getElementById('stopid')
+        @setStop(@stop)
 
         for name, dims of @viewBoxes
             option = document.createElement('option')
@@ -336,6 +338,9 @@ class SimUI
         @speedSelect.onchange = =>
             @controller.setSpeed @speedSelect.value
 
+    setStop: (@stop) ->
+        @stopElement.innerText = @stop.name
+
     humanTime: (clock, sep=false) ->
         days = ['Monday', 'Tuesday']
         halfdays = ['AM', 'PM']
@@ -365,6 +370,12 @@ class InfoBox
         @boxElement = document.getElementById('stop_info')
         @nameElement = document.getElementById('stop_name')
         @reachedElement = document.getElementById('stop_reached')
+
+    click: (e) =>
+        [lat, lon] = @canvas.cs.toCoords([e.clientX, e.clientY])
+        [[point, dist]] = @td.stopsTree.nearest({lat: lat, lon: lon}, 1)
+        if dist < 0.005
+            @ui.setStop(point)
 
     updateInfoBox: (e) =>
         [lat, lon] = @canvas.cs.toCoords([e.clientX, e.clientY])
@@ -402,11 +413,11 @@ main = ->
 
     controller.startCallback = =>
         canvas.reset()
-        traveller = new Traveller(td, config.originStop, controller.time, segmentCallback)
+        traveller = new Traveller(td, ui.stop.id, controller.time, segmentCallback)
         traveller.doneCallback = controller.pause
         infobox.traveller = traveller
 
-    ui = new SimUI(controller, config.viewBoxes)
+    ui = new SimUI(controller, config.viewBoxes, config.originStop)
     infobox.ui = ui
 
     ui.onViewbox = (viewbox) =>
@@ -414,6 +425,7 @@ main = ->
         canvas.setCoordinateSpace cs
 
         canvas.canvas.onmousemove = infobox.updateInfoBox
+        canvas.canvas.onclick = infobox.click
 
         
 
